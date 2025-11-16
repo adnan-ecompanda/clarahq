@@ -2,7 +2,7 @@ from fastapi import Depends, HTTPException, Header
 from fastapi.security import HTTPBearer
 from jose import jwt, JWTError
 
-from .security import SECRET_KEY, ALGO
+from .security import SECRET_KEY, ALGORITHM
 from .crud_user import get_user
 
 reusable_oauth2 = HTTPBearer()
@@ -12,7 +12,7 @@ def get_current_user(credentials=Depends(reusable_oauth2)):
     token = credentials.credentials
 
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGO])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = int(payload.get("sub"))
         role = payload.get("role")
     except JWTError:

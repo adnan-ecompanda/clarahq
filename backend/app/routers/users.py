@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
 from ..schemas_user import UserCreate, UserOut, LoginInput, TokenOut
-from .. import crud_user
 from ..security import verify_password, create_token
+from .. import schemas, crud_user
+
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -11,15 +12,22 @@ def create_user(payload: UserCreate):
     return crud_user.create_user(payload)
 
 
-@router.post("/login", response_model=TokenOut)
-def login(payload: LoginInput):
+@router.post("/login")
+def login(payload: schemas.UserLogin):
     user = crud_user.get_user_by_email(payload.email)
+
     if not user:
-        raise HTTPException(status_code=401, detail="Invalid login")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    stored_hash = crud_user.get_user_by_email(payload.email).password_hash
+    # Compare password
+    stored_hash = user["password_hash"]
     if not verify_password(payload.password, stored_hash):
-        raise HTTPException(status_code=401, detail="Invalid login")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
 
-    token = create_token(user.id, user.role)
-    return TokenOut(access_token=token)
+    # Create JWT token
+    token = create_token(user["id"], user["role"])
+
+    return {
+        "access_token": token,
+        "token_type": "bearer"
+    }

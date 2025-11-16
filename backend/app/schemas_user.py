@@ -27,8 +27,24 @@ class UserCreate(UserBase):
     password: str  # plaintext input (we will hash it)
 
 
-class UserOut(UserBase):
+class UserOut(BaseModel):
     id: int
+    first_name: str
+    last_name: str
+    email: str
+    phone: Optional[str] = None
+    role: str
+    department: Optional[str] = None
+    specialty: Optional[str] = None
+    npi_number: Optional[str] = None
+    credentials: Optional[str] = None
+    license_number: Optional[str] = None
+    license_state: Optional[str] = None
+    profile_photo_url: Optional[str] = None
+    language_preference: Optional[str] = None
+    notification_preferences: Optional[str] = None
+
+    active: int   # 🔥 ADD THIS LINE
 
     class Config:
         from_attributes = True

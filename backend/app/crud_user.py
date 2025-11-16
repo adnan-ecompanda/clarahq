@@ -85,12 +85,18 @@ def get_user(user_id: int) -> Optional[UserOut]:
     return UserOut(**dict_from_row(row))
 
 
-def get_user_by_email(email: str) -> Optional[UserOut]:
+def get_user_by_email(email: str):
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("SELECT * FROM users WHERE email = ?", (email,))
     row = cur.fetchone()
+
     conn.close()
+
     if not row:
         return None
-    return UserOut(**dict_from_row(row))
+
+    # Return raw database row (dictionary), not UserOut,
+    # because login needs access to password_hash
+    return dict(row)
