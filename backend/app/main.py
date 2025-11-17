@@ -11,6 +11,7 @@ from .crud_results import init_imaging_attachments_table
 from .crud_medication import init_medication_table
 from .crud_allergies import init_allergy_table
 from .crud_mar import init_mar_tables
+from .crud_immunization import init_immunization_table
 
 from .routers import patients as patients_router
 from .routers import users as users_router
@@ -21,6 +22,7 @@ from .routers import results as results_router
 from .routers import medications as medications_router
 from .routers import allergies as allergies_router
 from .routers import mar as mar_router
+from .routers import immunizations as immunization_router
 
 # Create tables on startup
 init_db()
@@ -34,6 +36,7 @@ init_imaging_attachments_table()
 init_medication_table()
 init_allergy_table()
 init_mar_tables()
+init_immunization_table()
 
 app = FastAPI(
     title="ClaraHQ Backend (Python 3.13 + SQLite)",
@@ -54,3 +57,4 @@ app.include_router(results_router.router)
 app.include_router(medications_router.router)
 app.include_router(allergies_router.router)
 app.include_router(mar_router.router)
+app.include_router(immunization_router.router)
