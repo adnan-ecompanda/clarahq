@@ -6,6 +6,8 @@ from .schemas_results import (
     ImagingResultCreate, ImagingResultUpdate, ImagingResultOut
 )
 from datetime import datetime
+import shutil, os
+from fastapi import UploadFile
 
 def init_results_tables():
     conn = get_connection()
@@ -69,10 +71,12 @@ def init_results_tables():
 def create_lab_result(data: LabResultCreate) -> LabResultOut:
     conn = get_connection()
     cur = conn.cursor()
-    payload = data.model_dump()
-    if payload["result_date"] is None:
-        payload["result_date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    payload = data.model_dump()
+
+    # Auto-set result_date if null
+    if payload.get("result_date") is None:
+        payload["result_date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     cur.execute("""
         INSERT INTO lab_results (
@@ -90,6 +94,7 @@ def create_lab_result(data: LabResultCreate) -> LabResultOut:
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
+
     return get_lab_result(new_id)
 
 
@@ -103,16 +108,27 @@ def get_lab_result(result_id: int) -> Optional[LabResultOut]:
 
 
 def update_lab_result(result_id: int, data: LabResultUpdate):
-    payload = {k: v for k, v in data.model_dump().items() if v is not None}
-    if not payload:
+    update_data = data.model_dump(exclude_unset=True)
+
+    # Auto-set date if explicitly passed as null
+    if "result_date" in update_data and update_data["result_date"] is None:
+        update_data["result_date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if not update_data:
         return get_lab_result(result_id)
 
-    set_clause = ", ".join([f"{k} = :{k}" for k in payload])
-    payload["id"] = result_id
+    # Build SQL SET clause
+    set_clause = ", ".join([f"{k} = :{k}" for k in update_data])
+    update_data["id"] = result_id
 
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(f"UPDATE lab_results SET {set_clause}, updated_at = datetime('now') WHERE id = :id", payload)
+
+    cur.execute(
+        f"UPDATE lab_results SET {set_clause}, updated_at = datetime('now') WHERE id = :id",
+        update_data
+    )
+
     conn.commit()
     conn.close()
 
@@ -189,3 +205,43 @@ def list_imaging_results(patient_id: int):
     rows = cur.fetchall()
     conn.close()
     return [ImagingResultOut(**dict_from_row(r)) for r in rows]
+
+def init_imaging_attachments_table():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS imaging_attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            imaging_result_id INTEGER NOT NULL,
+            file_name TEXT,
+            file_path TEXT,
+            file_type TEXT,
+            uploaded_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (imaging_result_id) REFERENCES imaging_results(id)
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+UPLOAD_DIR = "uploads/imaging"
+
+def save_imaging_attachment(result_id: int, file: UploadFile):
+    if not os.path.exists(UPLOAD_DIR):
+        os.makedirs(UPLOAD_DIR)
+
+    file_path = f"{UPLOAD_DIR}/{result_id}_{file.filename}"
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT INTO imaging_attachments (imaging_result_id, file_name, file_path, file_type)
+        VALUES (?, ?, ?, ?)
+    """, (result_id, file.filename, file_path, file.content_type))
+
+    conn.commit()
+    conn.close()
+
+    return {"message": "File uploaded successfully", "file_path": file_path}

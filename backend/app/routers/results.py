@@ -1,10 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from typing import Optional
 
 from ..auth import get_current_user, require_roles
 from ..crud_results import (
     create_lab_result, get_lab_result, update_lab_result, list_lab_results,
-    create_imaging_result, get_imaging_result, update_imaging_result, list_imaging_results
+    create_imaging_result, get_imaging_result, update_imaging_result, list_imaging_results, save_imaging_attachment
 )
 from ..schemas_results import (
     LabResultCreate, LabResultUpdate, LabResultOut,
@@ -47,3 +47,11 @@ def get_imaging(result_id: int, user=Depends(get_current_user)):
 @router.put("/imaging/{result_id}", response_model=ImagingResultOut)
 def update_imaging(result_id: int, data: ImagingResultUpdate, user=Depends(require_roles("admin", "provider"))):
     return update_imaging_result(result_id, data)
+
+@router.post("/imaging/{result_id}/upload")
+async def upload_imaging_attachment(
+    result_id: int,
+    file: UploadFile = File(...),
+    current_user = Depends(require_roles("admin", "provider"))
+):
+    return save_imaging_attachment(result_id, file)

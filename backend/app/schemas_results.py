@@ -88,3 +88,26 @@ class ImagingResultOut(BaseModel):
 
     created_at: str
     updated_at: str
+
+class ImagingAttachment(BaseModel):
+    id: int
+    file_name: str
+    file_path: str
+    file_type: str
+    uploaded_at: str
+
+class ImagingResultOut(BaseModel):
+    id: int
+    order_id: int | None
+    patient_id: int
+    provider_id: int | None
+    encounter_id: int | None
+
+    study_type: str
+    body_part: str | None
+    findings: str | None
+    impression: str | None
+    result_date: str
+    active: int
+
+    attachments: list[ImagingAttachment] = []
