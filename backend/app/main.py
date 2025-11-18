@@ -19,6 +19,7 @@ from .crud_billing import init_billing_tables
 from .crud_tasks import init_task_table
 from .crud_documents import init_document_tables
 from .crud_messages import init_message_tables
+from .crud_referrals import init_referral_tables
 
 from .routers import patients as patients_router
 from .routers import users as users_router
@@ -37,6 +38,7 @@ from .routers import billing as billing_router
 from .routers import tasks as tasks_router
 from .routers import documents as documents_router
 from .routers import messages as messages_router
+from .routers import referrals as referrals_router
 
 # Create tables on startup
 init_db()
@@ -58,6 +60,7 @@ init_billing_tables()
 init_task_table()
 init_document_tables()
 init_message_tables()
+init_referral_tables()
 
 app = FastAPI(
     title="ClaraHQ Backend (Python 3.13 + SQLite)",
@@ -86,3 +89,4 @@ app.include_router(billing_router.router)
 app.include_router(tasks_router.router)
 app.include_router(documents_router.router)
 app.include_router(messages_router.router)
+app.include_router(referrals_router.router)
