@@ -245,3 +245,39 @@ def save_imaging_attachment(result_id: int, file: UploadFile):
     conn.close()
 
     return {"message": "File uploaded successfully", "file_path": file_path}
+
+def list_labs_for_patient(patient_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT *
+        FROM lab_results
+        WHERE patient_id = ?
+        ORDER BY result_date DESC
+    """, (patient_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return [dict_from_row(r) for r in rows]
+
+
+def list_imaging_for_patient(patient_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT *
+        FROM imaging_results
+        WHERE patient_id = ?
+        ORDER BY result_date DESC
+    """, (patient_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return [dict_from_row(r) for r in rows]
+
+# Aliases for CCD compatibility ------------------
+
+def list_lab_results_for_patient(patient_id: int):
+    return list_labs_for_patient(patient_id)
+
+
+def list_imaging_results_for_patient(patient_id: int):
+    return list_imaging_for_patient(patient_id) 

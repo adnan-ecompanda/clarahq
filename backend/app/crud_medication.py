@@ -100,3 +100,11 @@ def update_medication_order(order_id: int, data: MedicationUpdate) -> Medication
     conn.close()
 
     return get_medication_order(order_id)
+
+def list_medications(patient_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM medications WHERE patient_id = ?", (patient_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return [dict_from_row(r) for r in rows]

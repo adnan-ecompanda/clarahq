@@ -96,3 +96,11 @@ def update_allergy(allergy_id: int, data: AllergyUpdate):
     conn.commit()
     conn.close()
     return get_allergy(allergy_id)
+
+def list_allergies(patient_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM allergies WHERE patient_id = ?", (patient_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return [dict_from_row(r) for r in rows]

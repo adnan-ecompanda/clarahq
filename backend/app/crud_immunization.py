@@ -110,3 +110,11 @@ def delete_immunization(immunization_id: int):
     conn.commit()
     conn.close()
     return {"status": "deleted"}
+
+def list_immunizations(patient_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM immunizations WHERE patient_id = ?", (patient_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return [dict_from_row(r) for r in rows]

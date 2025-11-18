@@ -121,3 +121,20 @@ def delete_careplan(cp_id: int):
     conn.close()
 
     return {"status": "deleted"}
+
+def list_careplans_for_patient(patient_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT *
+        FROM care_plans
+        WHERE patient_id = ?
+        AND active = 1
+        ORDER BY start_date DESC
+    """, (patient_id,))
+
+    rows = cur.fetchall()
+    conn.close()
+
+    return [dict_from_row(r) for r in rows]

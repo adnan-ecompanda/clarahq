@@ -1,6 +1,6 @@
 from .database import get_connection, dict_from_row
 from datetime import datetime
-
+from typing import Optional
 
 def init_vitals_tables():
     conn = get_connection()
@@ -186,3 +186,31 @@ def list_flowsheet(patient_id: int, panel: str = None):
     rows = cur.fetchall()
     conn.close()
     return [dict_from_row(r) for r in rows]
+
+def list_patient_vitals(patient_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM vitals WHERE patient_id = ?", (patient_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return [dict_from_row(r) for r in rows]
+
+def get_latest_vitals_for_patient(patient_id: int) -> Optional[dict]:
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT *
+        FROM vitals
+        WHERE patient_id = ?
+        AND active = 1
+        ORDER BY taken_at DESC
+        LIMIT 1
+    """, (patient_id,))
+    
+    row = cur.fetchone()
+    conn.close()
+
+    if row:
+        return dict_from_row(row)
+
+    return None

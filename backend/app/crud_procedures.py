@@ -115,3 +115,11 @@ def delete_procedure(proc_id: int):
     conn.close()
 
     return {"status": "deleted"}
+
+def list_procedures(patient_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM procedures WHERE patient_id = ?", (patient_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return [dict_from_row(r) for r in rows]

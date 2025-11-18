@@ -11,32 +11,26 @@ def init_patient_table():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS patients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-
             first_name TEXT NOT NULL,
             last_name TEXT NOT NULL,
             date_of_birth TEXT,
             gender TEXT,
             phone TEXT,
             email TEXT,
-
             address_line1 TEXT,
             address_line2 TEXT,
             city TEXT,
             state TEXT,
             postal_code TEXT,
-
             emergency_contact_name TEXT,
             emergency_contact_phone TEXT,
             emergency_contact_relationship TEXT,
-
             insurance_provider TEXT,
             insurance_member_id TEXT,
             insurance_group_number TEXT,
-
             allergies TEXT,
             medications TEXT,
             chronic_conditions TEXT,
-
             active INTEGER DEFAULT 1,
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
@@ -45,6 +39,9 @@ def init_patient_table():
 
     conn.commit()
     conn.close()
+
+    # Ensure new column exists even in older DB
+    ensure_active_column()
 
 
 def create_patient(data: PatientCreate) -> PatientOut:
@@ -139,3 +136,16 @@ def delete_patient(patient_id: int) -> bool:
     conn.commit()
     conn.close()
     return True
+
+def ensure_active_column():
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("PRAGMA table_info(patients)")
+    cols = [c[1] for c in cur.fetchall()]
+
+    if "active" not in cols:
+        cur.execute("ALTER TABLE patients ADD COLUMN active INTEGER DEFAULT 1")
+        conn.commit()
+
+    conn.close()

@@ -148,3 +148,19 @@ def delete_encounter(encounter_id: int) -> bool:
     conn.commit()
     conn.close()
     return True
+
+def list_encounters_for_patient(patient_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+    
+    cur.execute("""
+        SELECT *
+        FROM encounters
+        WHERE patient_id = ? AND active = 1
+        ORDER BY visit_date DESC
+    """, (patient_id,))
+    
+    rows = cur.fetchall()
+    conn.close()
+    
+    return [dict_from_row(r) for r in rows]
