@@ -23,6 +23,7 @@ from .crud_referrals import init_referral_tables
 from .crud_vitals import init_vitals_tables
 from .crud_appointments import init_appointment_tables
 from .crud_portal_messages import init_portal_message_tables
+from .crud_notifications import init_notification_tables
 
 from .routers import patients as patients_router
 from .routers import users as users_router
@@ -45,6 +46,7 @@ from .routers import referrals as referrals_router
 from .routers import vitals as vitals_router
 from .routers import appointments as appointments_router
 from .routers import portal_messages as portal_messages_router
+from .routers import notifications as notifications_router
 
 # Create tables on startup
 init_db()
@@ -70,6 +72,7 @@ init_referral_tables()
 init_vitals_tables()
 init_appointment_tables()
 init_portal_message_tables()
+init_notification_tables()
 
 app = FastAPI(
     title="ClaraHQ Backend (Python 3.13 + SQLite)",
@@ -102,3 +105,4 @@ app.include_router(referrals_router.router)
 app.include_router(vitals_router.router)
 app.include_router(appointments_router.router)
 app.include_router(portal_messages_router.router)
+app.include_router(notifications_router.router)
