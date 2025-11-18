@@ -180,3 +180,71 @@ def delete_superbill(sb_id: int):
     conn.close()
 
     return {"status": "deleted"}
+
+def auto_generate_superbill(encounter_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # 1. Get encounter
+    cur.execute("SELECT * FROM encounters WHERE id = ?", (encounter_id,))
+    enc = cur.fetchone()
+    if not enc:
+        return None
+
+    enc = dict_from_row(enc)
+    patient_id = enc["patient_id"]
+    provider_id = enc["provider_id"]
+
+    # 2. Get ICD-10 from problems
+    cur.execute("""
+        SELECT icd10_code
+        FROM problems
+        WHERE patient_id = ? AND active = 1
+    """, (patient_id,))
+    icd_codes = [r["icd10_code"] for r in cur.fetchall()]
+
+    icd10_code = icd_codes[0] if icd_codes else None
+
+    # 3. Get CPT from procedures
+    cur.execute("""
+        SELECT cpt_code
+        FROM procedures
+        WHERE encounter_id = ?
+    """, (encounter_id,))
+    proc = cur.fetchone()
+    cpt_code = proc["cpt_code"] if proc else None
+
+    # 4. If CPT missing → infer from visit_type
+    if not cpt_code:
+        visit_type = enc.get("visit_type", "")
+
+        visit_map = {
+            "office_new": "99203",
+            "office_established": "99213",
+            "consultation": "99242",
+            "telehealth": "99423",
+            "urgent_care": "99204"
+        }
+
+        for k, v in visit_map.items():
+            if k in visit_type.lower():
+                cpt_code = v
+                break
+
+        if not cpt_code:
+            cpt_code = "99213"  # DEFAULT CPT
+
+    # 5. Insert superbill
+    cur.execute("""
+        INSERT INTO superbills (
+            encounter_id, patient_id, provider_id,
+            cpt_code, icd10_code, units, modifier, status
+        )
+        VALUES (?, ?, ?, ?, ?, 1, NULL, 'draft')
+    """, (encounter_id, patient_id, provider_id, cpt_code, icd10_code))
+
+    conn.commit()
+    new_id = cur.lastrowid
+    conn.close()
+
+    return get_superbill(new_id)

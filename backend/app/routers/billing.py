@@ -8,7 +8,7 @@ from ..crud_billing import (
     create_billing_code, list_billing_codes, get_billing_code,
     update_billing_code, delete_billing_code,
     create_superbill, get_superbill, update_superbill,
-    delete_superbill
+    delete_superbill, auto_generate_superbill
 )
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
@@ -67,3 +67,13 @@ def update_sb(sb_id: int, data: SuperbillUpdate):
 @router.delete("/superbill/{sb_id}", dependencies=[Depends(require_roles("admin"))])
 def delete_sb(sb_id: int):
     return delete_superbill(sb_id)
+
+@router.post("/billing/superbill/auto/{encounter_id}")
+def generate_auto_superbill(
+    encounter_id: int,
+    current_user=Depends(require_roles("admin", "provider"))
+):
+    sb = auto_generate_superbill(encounter_id)
+    if not sb:
+        raise HTTPException(404, "Encounter not found")
+    return sb
