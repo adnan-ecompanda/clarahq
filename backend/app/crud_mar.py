@@ -8,6 +8,8 @@ from .schemas_mar import (
     MARCreate, MARUpdate, MAROut
 )
 
+from .audit import log_event   # <-- ADDED
+
 
 # -------------------- CREATE TABLES ------------------------
 
@@ -68,7 +70,9 @@ def init_mar_tables():
     conn.close()
 
 
-# -------------------- MEDICATION ORDERS ------------------------
+# ============================================================
+#                    MEDICATION ORDERS
+# ============================================================
 
 def create_med_order(data: MedicationOrderCreate) -> MedicationOrderOut:
     conn = get_connection()
@@ -95,6 +99,9 @@ def create_med_order(data: MedicationOrderCreate) -> MedicationOrderOut:
     new_id = cur.lastrowid
     conn.close()
 
+    # AUDIT
+    log_event("create", "med_order", new_id, meta=payload)
+
     return get_med_order(new_id)
 
 
@@ -104,8 +111,11 @@ def get_med_order(order_id: int) -> Optional[MedicationOrderOut]:
 
     cur.execute("SELECT * FROM medication_orders WHERE id = ?", (order_id,))
     row = cur.fetchone()
-
     conn.close()
+
+    if row:
+        log_event("read", "med_order", order_id)
+
     return MedicationOrderOut(**dict_from_row(row)) if row else None
 
 
@@ -113,9 +123,13 @@ def list_med_orders(patient_id: int):
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM medication_orders WHERE patient_id = ? AND active = 1", (patient_id,))
+    cur.execute("SELECT * FROM medication_orders WHERE patient_id = ? AND active = 1",
+                (patient_id,))
     rows = cur.fetchall()
     conn.close()
+
+    # AUDIT
+    log_event("list", "med_order", meta={"patient_id": patient_id})
 
     return [MedicationOrderOut(**dict_from_row(r)) for r in rows]
 
@@ -138,6 +152,10 @@ def update_med_order(order_id: int, data: MedicationOrderUpdate):
 
     conn.commit()
     conn.close()
+
+    # AUDIT
+    log_event("update", "med_order", order_id, meta=payload)
+
     return get_med_order(order_id)
 
 
@@ -149,10 +167,15 @@ def delete_med_order(order_id: int):
     conn.commit()
     conn.close()
 
+    # AUDIT
+    log_event("delete", "med_order", order_id)
+
     return {"status": "deleted"}
 
 
-# -------------------- MAR ENTRIES ------------------------
+# ============================================================
+#                    MAR ENTRIES
+# ============================================================
 
 def create_mar_entry(data: MARCreate) -> MAROut:
     conn = get_connection()
@@ -179,6 +202,9 @@ def create_mar_entry(data: MARCreate) -> MAROut:
     new_id = cur.lastrowid
     conn.close()
 
+    # AUDIT
+    log_event("create", "mar_entry", new_id, meta=payload)
+
     return get_mar_entry(new_id)
 
 
@@ -190,6 +216,10 @@ def get_mar_entry(entry_id: int) -> Optional[MAROut]:
     row = cur.fetchone()
 
     conn.close()
+
+    if row:
+        log_event("read", "mar_entry", entry_id)
+
     return MAROut(**dict_from_row(row)) if row else None
 
 
@@ -197,9 +227,13 @@ def list_mar_entries(order_id: int):
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM mar_entries WHERE order_id = ? AND active = 1", (order_id,))
+    cur.execute("SELECT * FROM mar_entries WHERE order_id = ? AND active = 1",
+                (order_id,))
     rows = cur.fetchall()
     conn.close()
+
+    # AUDIT
+    log_event("list", "mar_entry", meta={"order_id": order_id})
 
     return [MAROut(**dict_from_row(r)) for r in rows]
 
@@ -222,6 +256,10 @@ def update_mar_entry(entry_id: int, data: MARUpdate):
 
     conn.commit()
     conn.close()
+
+    # AUDIT
+    log_event("update", "mar_entry", entry_id, meta=payload)
+
     return get_mar_entry(entry_id)
 
 
@@ -232,5 +270,8 @@ def delete_mar_entry(entry_id: int):
     cur.execute("UPDATE mar_entries SET active = 0 WHERE id = ?", (entry_id,))
     conn.commit()
     conn.close()
+
+    # AUDIT
+    log_event("delete", "mar_entry", entry_id)
 
     return {"status": "deleted"}

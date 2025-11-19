@@ -1,9 +1,14 @@
 import sqlite3
 from typing import Optional, List
+
 from .database import get_connection, dict_from_row
 from .schemas_order import OrderCreate, OrderUpdate, OrderOut
+from .audit import log_event   # ⬅️ ADDED
 
 
+# ---------------------------------------------------------
+#                    INIT TABLE
+# ---------------------------------------------------------
 def init_order_table():
     conn = get_connection()
     cur = conn.cursor()
@@ -23,7 +28,7 @@ def init_order_table():
             priority TEXT,              -- routine, urgent, stat
             clinical_notes TEXT,
 
-            status TEXT DEFAULT 'pending',  
+            status TEXT DEFAULT 'pending',
             -- pending, in-progress, completed, cancelled
 
             external_order_id TEXT,     -- lab system order ID
@@ -39,6 +44,9 @@ def init_order_table():
     conn.close()
 
 
+# ---------------------------------------------------------
+#                    CREATE ORDER
+# ---------------------------------------------------------
 def create_order(data: OrderCreate) -> OrderOut:
     conn = get_connection()
     cur = conn.cursor()
@@ -62,20 +70,35 @@ def create_order(data: OrderCreate) -> OrderOut:
     new_id = cur.lastrowid
     conn.close()
 
+    # AUDIT LOG
+    log_event("create", "order", new_id, meta=payload)
+
     return get_order(new_id)
 
 
+# ---------------------------------------------------------
+#                    GET ORDER
+# ---------------------------------------------------------
 def get_order(order_id: int) -> Optional[OrderOut]:
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
     row = cur.fetchone()
     conn.close()
+
     if not row:
         return None
+
+    # AUDIT LOG
+    log_event("read", "order", order_id)
+
     return OrderOut(**dict_from_row(row))
 
 
+# ---------------------------------------------------------
+#                    UPDATE ORDER
+# ---------------------------------------------------------
 def update_order(order_id: int, data: OrderUpdate) -> Optional[OrderOut]:
     payload = {k: v for k, v in data.model_dump().items() if v is not None}
 
@@ -88,23 +111,38 @@ def update_order(order_id: int, data: OrderUpdate) -> Optional[OrderOut]:
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute(f"UPDATE orders SET {set_clause}, updated_at = datetime('now') WHERE id = :id", payload)
+    cur.execute(
+        f"UPDATE orders SET {set_clause}, updated_at = datetime('now') WHERE id = :id",
+        payload
+    )
     conn.commit()
     conn.close()
+
+    # AUDIT LOG
+    log_event("update", "order", order_id, meta=payload)
 
     return get_order(order_id)
 
 
+# ---------------------------------------------------------
+#                    LIST ORDERS
+# ---------------------------------------------------------
 def list_orders(patient_id: Optional[int] = None) -> List[OrderOut]:
     conn = get_connection()
     cur = conn.cursor()
 
     if patient_id:
-        cur.execute("SELECT * FROM orders WHERE patient_id = ? ORDER BY created_at DESC", (patient_id,))
+        cur.execute(
+            "SELECT * FROM orders WHERE patient_id = ? ORDER BY created_at DESC",
+            (patient_id,)
+        )
     else:
         cur.execute("SELECT * FROM orders ORDER BY created_at DESC")
 
     rows = cur.fetchall()
     conn.close()
+
+    # AUDIT LOG
+    log_event("list", "order", meta={"patient_id": patient_id})
 
     return [OrderOut(**dict_from_row(r)) for r in rows]

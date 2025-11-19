@@ -1,6 +1,8 @@
 from typing import Optional
 from .database import get_connection, dict_from_row
 from .schemas_tasks import TaskCreate, TaskUpdate, TaskOut
+from .audit import log_event   # <-- ADDED
+
 
 # ------------------- INIT TABLE -------------------
 
@@ -35,7 +37,8 @@ def init_task_table():
     conn.commit()
     conn.close()
 
-# ------------------- CRUD -------------------
+
+# ------------------- CREATE -------------------
 
 def create_task(data: TaskCreate) -> TaskOut:
     conn = get_connection()
@@ -60,8 +63,14 @@ def create_task(data: TaskCreate) -> TaskOut:
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
+
+    # AUDIT
+    log_event("create", "task", new_id, payload)
+
     return get_task(new_id)
 
+
+# ------------------- READ -------------------
 
 def get_task(task_id: int) -> Optional[TaskOut]:
     conn = get_connection()
@@ -69,8 +78,14 @@ def get_task(task_id: int) -> Optional[TaskOut]:
     cur.execute("SELECT * FROM tasks WHERE id = ?", (task_id,))
     row = cur.fetchone()
     conn.close()
+
+    if row:
+        log_event("read", "task", task_id)
+
     return TaskOut(**dict_from_row(row)) if row else None
 
+
+# ------------------- LIST -------------------
 
 def list_tasks(status: Optional[str] = None):
     conn = get_connection()
@@ -84,8 +99,13 @@ def list_tasks(status: Optional[str] = None):
     rows = cur.fetchall()
     conn.close()
 
+    # AUDIT
+    log_event("list", "task", meta={"status": status})
+
     return [TaskOut(**dict_from_row(r)) for r in rows]
 
+
+# ------------------- UPDATE -------------------
 
 def update_task(task_id: int, data: TaskUpdate):
     payload = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -108,8 +128,13 @@ def update_task(task_id: int, data: TaskUpdate):
     conn.commit()
     conn.close()
 
+    # AUDIT
+    log_event("update", "task", task_id, payload)
+
     return get_task(task_id)
 
+
+# ------------------- DELETE -------------------
 
 def delete_task(task_id: int):
     conn = get_connection()
@@ -118,5 +143,8 @@ def delete_task(task_id: int):
     cur.execute("UPDATE tasks SET active = 0 WHERE id = ?", (task_id,))
     conn.commit()
     conn.close()
+
+    # AUDIT
+    log_event("delete", "task", task_id)
 
     return {"status": "deleted"}

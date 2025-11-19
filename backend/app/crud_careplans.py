@@ -1,6 +1,8 @@
 from typing import Optional
 from .database import get_connection, dict_from_row
 from .schemas_careplans import CarePlanCreate, CarePlanUpdate, CarePlanOut
+from .audit import log_event   # <-- AUDIT LOGGER
+
 
 def init_careplan_table():
     conn = get_connection()
@@ -62,6 +64,9 @@ def create_careplan(data: CarePlanCreate) -> CarePlanOut:
     new_id = cur.lastrowid
     conn.close()
 
+    # AUDIT
+    log_event("create", "careplan", new_id, payload)
+
     return get_careplan(new_id)
 
 
@@ -73,6 +78,10 @@ def get_careplan(cp_id: int) -> Optional[CarePlanOut]:
     row = cur.fetchone()
 
     conn.close()
+
+    if row:
+        log_event("read", "careplan", cp_id)
+
     return CarePlanOut(**dict_from_row(row)) if row else None
 
 
@@ -80,9 +89,15 @@ def list_patient_careplans(patient_id: int):
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM care_plans WHERE patient_id = ? AND active = 1", (patient_id,))
+    cur.execute("""
+        SELECT * FROM care_plans
+        WHERE patient_id = ? AND active = 1
+    """, (patient_id,))
     rows = cur.fetchall()
     conn.close()
+
+    # AUDIT
+    log_event("list", "careplan", meta={"patient_id": patient_id})
 
     return [CarePlanOut(**dict_from_row(r)) for r in rows]
 
@@ -108,6 +123,9 @@ def update_careplan(cp_id: int, data: CarePlanUpdate):
     conn.commit()
     conn.close()
 
+    # AUDIT
+    log_event("update", "careplan", cp_id, payload)
+
     return get_careplan(cp_id)
 
 
@@ -120,21 +138,25 @@ def delete_careplan(cp_id: int):
     conn.commit()
     conn.close()
 
+    # AUDIT
+    log_event("delete", "careplan", cp_id)
+
     return {"status": "deleted"}
+
 
 def list_careplans_for_patient(patient_id: int):
     conn = get_connection()
     cur = conn.cursor()
 
     cur.execute("""
-        SELECT *
-        FROM care_plans
-        WHERE patient_id = ?
-        AND active = 1
+        SELECT * FROM care_plans
+        WHERE patient_id = ? AND active = 1
         ORDER BY start_date DESC
     """, (patient_id,))
-
     rows = cur.fetchall()
     conn.close()
+
+    # AUDIT
+    log_event("list", "careplan", meta={"patient_id": patient_id})
 
     return [dict_from_row(r) for r in rows]

@@ -4,10 +4,14 @@ from datetime import datetime
 from fastapi import UploadFile
 
 from .database import get_connection, dict_from_row
+from .audit import log_event   # <-- ADDED
 
 UPLOAD_ROOT = "uploads/referrals"
 
 
+# ---------------------------------------------------
+#                 INIT TABLES
+# ---------------------------------------------------
 def init_referral_tables():
     conn = get_connection()
     cur = conn.cursor()
@@ -20,13 +24,13 @@ def init_referral_tables():
             encounter_id INTEGER,
             provider_id INTEGER NOT NULL,
 
-            referral_type TEXT,          -- cardiology, imaging, lab, PT, etc.
-            referred_to TEXT,            -- doctor/clinic name
+            referral_type TEXT,
+            referred_to TEXT,
             specialty TEXT,
             reason TEXT,
             clinical_summary TEXT,
 
-            status TEXT DEFAULT 'pending',  -- pending, sent, accepted, completed, cancelled
+            status TEXT DEFAULT 'pending',
 
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now')),
@@ -34,7 +38,7 @@ def init_referral_tables():
         )
     """)
 
-    # Referral activity log (status timeline)
+    # Status timeline
     cur.execute("""
         CREATE TABLE IF NOT EXISTS referral_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,7 +49,7 @@ def init_referral_tables():
         )
     """)
 
-    # Attachments (optional)
+    # Attachments
     cur.execute("""
         CREATE TABLE IF NOT EXISTS referral_attachments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,10 +66,9 @@ def init_referral_tables():
     conn.close()
 
 
-# -----------------------------
-# CRUD HELPERS
-# -----------------------------
-
+# ---------------------------------------------------
+#                 CREATE REFERRAL
+# ---------------------------------------------------
 def create_referral(payload):
     conn = get_connection()
     cur = conn.cursor()
@@ -90,7 +93,7 @@ def create_referral(payload):
 
     new_id = cur.lastrowid
 
-    # Add first log entry
+    # Auto-log first entry
     cur.execute("""
         INSERT INTO referral_logs (referral_id, status, note)
         VALUES (?, 'pending', 'Referral created')
@@ -99,29 +102,53 @@ def create_referral(payload):
     conn.commit()
     conn.close()
 
+    # AUDIT
+    log_event("create", "referral", new_id, meta=payload.dict() if hasattr(payload, "dict") else payload)
+
     return get_referral(new_id)
 
 
+# ---------------------------------------------------
+#                    GET REFERRAL
+# ---------------------------------------------------
 def get_referral(referral_id: int):
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("SELECT * FROM referrals WHERE id = ?", (referral_id,))
     row = cur.fetchone()
     conn.close()
+
+    if row:
+        log_event("read", "referral", referral_id)
+
     return dict_from_row(row) if row else None
 
 
+# ---------------------------------------------------
+#             LIST FOR ONE PATIENT
+# ---------------------------------------------------
 def list_referrals_for_patient(patient_id: int):
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("""SELECT * FROM referrals 
-                   WHERE patient_id = ? AND active = 1""",
-                (patient_id,))
+
+    cur.execute("""
+        SELECT * FROM referrals
+        WHERE patient_id = ? AND active = 1
+    """, (patient_id,))
+    
     rows = cur.fetchall()
     conn.close()
+
+    # AUDIT
+    log_event("list", "referral", meta={"patient_id": patient_id})
+
     return [dict_from_row(r) for r in rows]
 
 
+# ---------------------------------------------------
+#          UPDATE REFERRAL STATUS
+# ---------------------------------------------------
 def update_referral_status(referral_id: int, status: str, note: str = None):
     conn = get_connection()
     cur = conn.cursor()
@@ -140,26 +167,37 @@ def update_referral_status(referral_id: int, status: str, note: str = None):
     conn.commit()
     conn.close()
 
+    # AUDIT
+    log_event("update", "referral", referral_id, meta={"status": status, "note": note})
+
     return get_referral(referral_id)
 
 
+# ---------------------------------------------------
+#                 GET REFERRAL LOGS
+# ---------------------------------------------------
 def get_referral_logs(referral_id: int):
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("""
         SELECT * FROM referral_logs
         WHERE referral_id = ?
         ORDER BY changed_at ASC
     """, (referral_id,))
+
     rows = cur.fetchall()
     conn.close()
+
+    # AUDIT
+    log_event("list", "referral_logs", meta={"referral_id": referral_id})
+
     return [dict_from_row(r) for r in rows]
 
 
-# -----------------------------
-# Attachments
-# -----------------------------
-
+# ---------------------------------------------------
+#            ATTACHMENT HANDLING
+# ---------------------------------------------------
 def save_attachment_file(referral_id: int, file: UploadFile):
     os.makedirs(f"{UPLOAD_ROOT}/{referral_id}", exist_ok=True)
 
@@ -188,5 +226,13 @@ def add_referral_attachment(referral_id: int, file: UploadFile):
 
     conn.commit()
     conn.close()
+
+    # AUDIT
+    log_event(
+        "upload",
+        "referral_attachment",
+        referral_id,
+        meta={"file_name": fname, "file_path": fpath, "size": fsize}
+    )
 
     return {"file_name": fname, "file_path": fpath}

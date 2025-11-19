@@ -1,19 +1,27 @@
-import sqlite3
+import os
+import shutil
+from datetime import datetime
 from typing import Optional, List
+
+from fastapi import UploadFile
+
 from .database import get_connection, dict_from_row
 from .schemas_results import (
     LabResultCreate, LabResultUpdate, LabResultOut,
     ImagingResultCreate, ImagingResultUpdate, ImagingResultOut
 )
-from datetime import datetime
-import shutil, os
-from fastapi import UploadFile
 
+from .audit import log_event   # AUDIT LOGGER
+
+
+# ==========================================
+# INIT TABLES
+# ==========================================
 def init_results_tables():
     conn = get_connection()
     cur = conn.cursor()
 
-    # -------- LAB RESULTS TABLE --------
+    # LAB RESULTS
     cur.execute("""
         CREATE TABLE IF NOT EXISTS lab_results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,7 +35,7 @@ def init_results_tables():
             value TEXT,
             unit TEXT,
             reference_range TEXT,
-            abnormal_flag TEXT, -- high, low, normal
+            abnormal_flag TEXT,
 
             notes TEXT,
             result_date TEXT DEFAULT (datetime('now')),
@@ -38,7 +46,7 @@ def init_results_tables():
         )
     """)
 
-    # -------- IMAGING RESULTS TABLE --------
+    # IMAGING RESULTS
     cur.execute("""
         CREATE TABLE IF NOT EXISTS imaging_results (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,7 +56,7 @@ def init_results_tables():
             provider_id INTEGER NOT NULL,
             encounter_id INTEGER,
 
-            modality TEXT NOT NULL, -- X-ray, CT, MRI, US
+            modality TEXT NOT NULL,
             body_part TEXT,
             impression TEXT,
             findings TEXT,
@@ -62,20 +70,33 @@ def init_results_tables():
         )
     """)
 
+    # ATTACHMENTS
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS imaging_attachments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            imaging_result_id INTEGER NOT NULL,
+            file_name TEXT,
+            file_path TEXT,
+            file_type TEXT,
+            uploaded_at TEXT DEFAULT (datetime('now')),
+            FOREIGN KEY (imaging_result_id) REFERENCES imaging_results(id)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
 
-# ============ LAB RESULTS ==============
-
+# ==========================================
+# LAB RESULTS
+# ==========================================
 def create_lab_result(data: LabResultCreate) -> LabResultOut:
     conn = get_connection()
     cur = conn.cursor()
 
     payload = data.model_dump()
 
-    # Auto-set result_date if null
-    if payload.get("result_date") is None:
+    if not payload.get("result_date"):
         payload["result_date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     cur.execute("""
@@ -95,6 +116,8 @@ def create_lab_result(data: LabResultCreate) -> LabResultOut:
     new_id = cur.lastrowid
     conn.close()
 
+    log_event("create", "lab_result", new_id, payload)
+
     return get_lab_result(new_id)
 
 
@@ -104,26 +127,27 @@ def get_lab_result(result_id: int) -> Optional[LabResultOut]:
     cur.execute("SELECT * FROM lab_results WHERE id = ?", (result_id,))
     row = cur.fetchone()
     conn.close()
+
+    if row:
+        log_event("read", "lab_result", result_id)
+
     return LabResultOut(**dict_from_row(row)) if row else None
 
 
 def update_lab_result(result_id: int, data: LabResultUpdate):
     update_data = data.model_dump(exclude_unset=True)
 
-    # Auto-set date if explicitly passed as null
     if "result_date" in update_data and update_data["result_date"] is None:
         update_data["result_date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     if not update_data:
         return get_lab_result(result_id)
 
-    # Build SQL SET clause
     set_clause = ", ".join([f"{k} = :{k}" for k in update_data])
     update_data["id"] = result_id
 
     conn = get_connection()
     cur = conn.cursor()
-
     cur.execute(
         f"UPDATE lab_results SET {set_clause}, updated_at = datetime('now') WHERE id = :id",
         update_data
@@ -132,24 +156,36 @@ def update_lab_result(result_id: int, data: LabResultUpdate):
     conn.commit()
     conn.close()
 
+    log_event("update", "lab_result", result_id, update_data)
+
     return get_lab_result(result_id)
 
 
-def list_lab_results(patient_id: int):
+def list_lab_results(patient_id: int) -> List[LabResultOut]:
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM lab_results WHERE patient_id = ? ORDER BY result_date DESC", (patient_id,))
+    cur.execute("""
+        SELECT * FROM lab_results
+        WHERE patient_id = ?
+        ORDER BY result_date DESC
+    """, (patient_id,))
     rows = cur.fetchall()
     conn.close()
+
+    log_event("list", "lab_result", meta={"patient_id": patient_id})
+
     return [LabResultOut(**dict_from_row(r)) for r in rows]
 
 
-# ============ IMAGING RESULTS ==============
-
+# ==========================================
+# IMAGING RESULTS
+# ==========================================
 def create_imaging_result(data: ImagingResultCreate) -> ImagingResultOut:
     conn = get_connection()
     cur = conn.cursor()
+
     payload = data.model_dump()
+
     if not payload.get("result_date"):
         payload["result_date"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -169,6 +205,9 @@ def create_imaging_result(data: ImagingResultCreate) -> ImagingResultOut:
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
+
+    log_event("create", "imaging_result", new_id, payload)
+
     return get_imaging_result(new_id)
 
 
@@ -178,11 +217,16 @@ def get_imaging_result(result_id: int) -> Optional[ImagingResultOut]:
     cur.execute("SELECT * FROM imaging_results WHERE id = ?", (result_id,))
     row = cur.fetchone()
     conn.close()
+
+    if row:
+        log_event("read", "imaging_result", result_id)
+
     return ImagingResultOut(**dict_from_row(row)) if row else None
 
 
 def update_imaging_result(result_id: int, data: ImagingResultUpdate):
-    payload = {k: v for k, v in data.model_dump().items() if v is not None}
+    payload = data.model_dump(exclude_unset=True)
+
     if not payload:
         return get_imaging_result(result_id)
 
@@ -191,39 +235,40 @@ def update_imaging_result(result_id: int, data: ImagingResultUpdate):
 
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute(f"UPDATE imaging_results SET {set_clause}, updated_at = datetime('now') WHERE id = :id", payload)
+    cur.execute(
+        f"UPDATE imaging_results SET {set_clause}, updated_at = datetime('now') WHERE id = :id",
+        payload
+    )
+
     conn.commit()
     conn.close()
+
+    log_event("update", "imaging_result", result_id, payload)
 
     return get_imaging_result(result_id)
 
 
-def list_imaging_results(patient_id: int):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM imaging_results WHERE patient_id = ? ORDER BY result_date DESC", (patient_id,))
-    rows = cur.fetchall()
-    conn.close()
-    return [ImagingResultOut(**dict_from_row(r)) for r in rows]
-
-def init_imaging_attachments_table():
+def list_imaging_results(patient_id: int) -> List[ImagingResultOut]:
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS imaging_attachments (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            imaging_result_id INTEGER NOT NULL,
-            file_name TEXT,
-            file_path TEXT,
-            file_type TEXT,
-            uploaded_at TEXT DEFAULT (datetime('now')),
-            FOREIGN KEY (imaging_result_id) REFERENCES imaging_results(id)
-        )
-    """)
-    conn.commit()
+        SELECT * FROM imaging_results
+        WHERE patient_id = ?
+        ORDER BY result_date DESC
+    """, (patient_id,))
+    rows = cur.fetchall()
     conn.close()
 
+    log_event("list", "imaging_result", meta={"patient_id": patient_id})
+
+    return [ImagingResultOut(**dict_from_row(r)) for r in rows]
+
+
+# ==========================================
+# ATTACHMENTS
+# ==========================================
 UPLOAD_DIR = "uploads/imaging"
+
 
 def save_imaging_attachment(result_id: int, file: UploadFile):
     if not os.path.exists(UPLOAD_DIR):
@@ -240,44 +285,25 @@ def save_imaging_attachment(result_id: int, file: UploadFile):
         INSERT INTO imaging_attachments (imaging_result_id, file_name, file_path, file_type)
         VALUES (?, ?, ?, ?)
     """, (result_id, file.filename, file_path, file.content_type))
-
     conn.commit()
     conn.close()
 
+    log_event(
+        "upload",
+        "imaging_attachment",
+        entity_id=result_id,
+        meta={"file_name": file.filename, "path": file_path}
+    )
+
     return {"message": "File uploaded successfully", "file_path": file_path}
 
-def list_labs_for_patient(patient_id: int):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT *
-        FROM lab_results
-        WHERE patient_id = ?
-        ORDER BY result_date DESC
-    """, (patient_id,))
-    rows = cur.fetchall()
-    conn.close()
-    return [dict_from_row(r) for r in rows]
 
-
-def list_imaging_for_patient(patient_id: int):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT *
-        FROM imaging_results
-        WHERE patient_id = ?
-        ORDER BY result_date DESC
-    """, (patient_id,))
-    rows = cur.fetchall()
-    conn.close()
-    return [dict_from_row(r) for r in rows]
-
-# Aliases for CCD compatibility ------------------
-
+# ==========================================
+# CCD ALIASES (FIX FOR YOUR ERROR)
+# ==========================================
 def list_lab_results_for_patient(patient_id: int):
-    return list_labs_for_patient(patient_id)
+    return list_lab_results(patient_id)
 
 
 def list_imaging_results_for_patient(patient_id: int):
-    return list_imaging_for_patient(patient_id) 
+    return list_imaging_results(patient_id)

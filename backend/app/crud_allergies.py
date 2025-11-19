@@ -1,8 +1,9 @@
-import sqlite3
 from typing import Optional, List
-from .database import get_connection, dict_from_row
 from datetime import datetime
+from .database import get_connection, dict_from_row
 from .schemas_allergies import AllergyCreate, AllergyUpdate, AllergyOut
+from .audit import log_event
+
 
 def init_allergy_table():
     conn = get_connection()
@@ -35,6 +36,7 @@ def init_allergy_table():
 def create_allergy(data: AllergyCreate) -> AllergyOut:
     conn = get_connection()
     cur = conn.cursor()
+
     payload = data.model_dump()
 
     cur.execute("""
@@ -51,33 +53,48 @@ def create_allergy(data: AllergyCreate) -> AllergyOut:
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
+
+    log_event("create", "allergy", new_id, payload)
+
     return get_allergy(new_id)
 
 
 def get_allergy(allergy_id: int) -> Optional[AllergyOut]:
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("SELECT * FROM allergies WHERE id = ?", (allergy_id,))
     row = cur.fetchone()
     conn.close()
+
+    if row:
+        log_event("read", "allergy", allergy_id)
+
     return AllergyOut(**dict_from_row(row)) if row else None
 
 
 def get_allergies_for_patient(patient_id: int) -> List[AllergyOut]:
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("""
-        SELECT * FROM allergies
+        SELECT *
+        FROM allergies
         WHERE patient_id = ? AND active = 1
         ORDER BY created_at DESC
     """, (patient_id,))
+
     rows = cur.fetchall()
     conn.close()
+
+    log_event("list", "allergy", meta={"patient_id": patient_id, "count": len(rows)})
+
     return [AllergyOut(**dict_from_row(r)) for r in rows]
 
 
 def update_allergy(allergy_id: int, data: AllergyUpdate):
     payload = {k: v for k, v in data.model_dump().items() if v is not None}
+
     if not payload:
         return get_allergy(allergy_id)
 
@@ -86,6 +103,7 @@ def update_allergy(allergy_id: int, data: AllergyUpdate):
 
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute(f"""
         UPDATE allergies
         SET {set_clause},
@@ -95,12 +113,20 @@ def update_allergy(allergy_id: int, data: AllergyUpdate):
 
     conn.commit()
     conn.close()
+
+    log_event("update", "allergy", allergy_id, payload)
+
     return get_allergy(allergy_id)
+
 
 def list_allergies(patient_id: int):
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("SELECT * FROM allergies WHERE patient_id = ?", (patient_id,))
     rows = cur.fetchall()
     conn.close()
+
+    log_event("list", "allergy", meta={"patient_id": patient_id, "count": len(rows)})
+
     return [dict_from_row(r) for r in rows]

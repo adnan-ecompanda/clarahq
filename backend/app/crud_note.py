@@ -1,6 +1,7 @@
 import sqlite3
 from typing import Optional, List
 from .database import get_connection, dict_from_row
+from .audit import log_event   # <-- ADDED
 
 
 def init_note_table():
@@ -33,6 +34,9 @@ def init_note_table():
     conn.close()
 
 
+# ---------------------------------------------------------
+#                      CREATE NOTE
+# ---------------------------------------------------------
 def create_note(payload: dict) -> dict:
     conn = get_connection()
     cur = conn.cursor()
@@ -56,9 +60,15 @@ def create_note(payload: dict) -> dict:
     note_id = cur.lastrowid
     conn.close()
 
+    # AUDIT
+    log_event("create", "clinical_note", note_id, meta=payload)
+
     return get_note(note_id)
 
 
+# ---------------------------------------------------------
+#                      READ NOTE
+# ---------------------------------------------------------
 def get_note(note_id: int) -> Optional[dict]:
     conn = get_connection()
     cur = conn.cursor()
@@ -67,11 +77,15 @@ def get_note(note_id: int) -> Optional[dict]:
     row = cur.fetchone()
     conn.close()
 
-    if not row:
-        return None
-    return dict_from_row(row)
+    if row:
+        log_event("read", "clinical_note", note_id)
+
+    return dict_from_row(row) if row else None
 
 
+# ---------------------------------------------------------
+#                  LIST NOTES FOR ENCOUNTER
+# ---------------------------------------------------------
 def get_notes_for_encounter(encounter_id: int) -> List[dict]:
     conn = get_connection()
     cur = conn.cursor()
@@ -80,9 +94,15 @@ def get_notes_for_encounter(encounter_id: int) -> List[dict]:
     rows = cur.fetchall()
     conn.close()
 
+    # AUDIT
+    log_event("list", "clinical_note", meta={"encounter_id": encounter_id})
+
     return [dict_from_row(r) for r in rows]
 
 
+# ---------------------------------------------------------
+#                      UPDATE NOTE
+# ---------------------------------------------------------
 def update_note(note_id: int, payload: dict) -> Optional[dict]:
     conn = get_connection()
     cur = conn.cursor()
@@ -99,9 +119,16 @@ def update_note(note_id: int, payload: dict) -> Optional[dict]:
 
     conn.commit()
     conn.close()
+
+    # AUDIT
+    log_event("update", "clinical_note", note_id, meta=payload)
+
     return get_note(note_id)
 
 
+# ---------------------------------------------------------
+#                      DELETE NOTE
+# ---------------------------------------------------------
 def delete_note(note_id: int):
     conn = get_connection()
     cur = conn.cursor()
@@ -109,5 +136,8 @@ def delete_note(note_id: int):
     cur.execute("UPDATE clinical_notes SET active = 0 WHERE id = ?", (note_id,))
     conn.commit()
     conn.close()
+
+    # AUDIT
+    log_event("delete", "clinical_note", note_id)
 
     return {"deleted": True}

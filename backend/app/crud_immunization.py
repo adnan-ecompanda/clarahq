@@ -1,7 +1,12 @@
+from typing import Optional
 from .database import get_connection, dict_from_row
 from .schemas_immunization import ImmunizationCreate, ImmunizationUpdate, ImmunizationOut
-from typing import Optional
+from .audit import log_event   # <-- AUDIT LOGGER
 
+
+# -------------------------------------------------
+# Init Table
+# -------------------------------------------------
 def init_immunization_table():
     conn = get_connection()
     cur = conn.cursor()
@@ -32,10 +37,12 @@ def init_immunization_table():
     conn.close()
 
 
+# -------------------------------------------------
+# Create
+# -------------------------------------------------
 def create_immunization(data: ImmunizationCreate) -> ImmunizationOut:
     conn = get_connection()
     cur = conn.cursor()
-
     payload = data.model_dump()
 
     cur.execute("""
@@ -55,9 +62,14 @@ def create_immunization(data: ImmunizationCreate) -> ImmunizationOut:
     new_id = cur.lastrowid
     conn.close()
 
+    log_event("create", "immunization", new_id, payload)
+
     return get_immunization(new_id)
 
 
+# -------------------------------------------------
+# Read
+# -------------------------------------------------
 def get_immunization(immunization_id: int) -> Optional[ImmunizationOut]:
     conn = get_connection()
     cur = conn.cursor()
@@ -66,27 +78,44 @@ def get_immunization(immunization_id: int) -> Optional[ImmunizationOut]:
     row = cur.fetchone()
     conn.close()
 
+    if row:
+        log_event("read", "immunization", immunization_id)
+
     return ImmunizationOut(**dict_from_row(row)) if row else None
 
 
+# -------------------------------------------------
+# List for Patient
+# -------------------------------------------------
 def list_immunizations(patient_id: int):
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM immunizations WHERE patient_id = ? AND active = 1", (patient_id,))
+    cur.execute("""
+        SELECT *
+        FROM immunizations
+        WHERE patient_id = ? AND active = 1
+        ORDER BY administered_date DESC
+    """, (patient_id,))
     rows = cur.fetchall()
-
     conn.close()
+
+    log_event("list", "immunization", meta={"patient_id": patient_id, "count": len(rows)})
+
     return [ImmunizationOut(**dict_from_row(r)) for r in rows]
 
 
+# -------------------------------------------------
+# Update
+# -------------------------------------------------
 def update_immunization(immunization_id: int, data: ImmunizationUpdate):
-    payload = {k: v for k, v in data.model_dump().items() if v is not None}
-    if not payload:
+    updates = {k: v for k, v in data.model_dump().items() if v is not None}
+
+    if not updates:
         return get_immunization(immunization_id)
 
-    set_clause = ", ".join([f"{k} = :{k}" for k in payload])
-    payload["id"] = immunization_id
+    set_clause = ", ".join([f"{k} = :{k}" for k in updates])
+    updates["id"] = immunization_id
 
     conn = get_connection()
     cur = conn.cursor()
@@ -95,26 +124,47 @@ def update_immunization(immunization_id: int, data: ImmunizationUpdate):
         UPDATE immunizations
         SET {set_clause}, updated_at = datetime('now')
         WHERE id = :id
-    """, payload)
+    """, updates)
 
     conn.commit()
     conn.close()
+
+    log_event("update", "immunization", immunization_id, updates)
 
     return get_immunization(immunization_id)
 
 
+# -------------------------------------------------
+# Delete (soft)
+# -------------------------------------------------
 def delete_immunization(immunization_id: int):
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("UPDATE immunizations SET active = 0 WHERE id = ?", (immunization_id,))
+
+    cur.execute("""
+        UPDATE immunizations
+        SET active = 0, updated_at = datetime('now')
+        WHERE id = ?
+    """, (immunization_id,))
+
     conn.commit()
     conn.close()
+
+    log_event("delete", "immunization", immunization_id)
+
     return {"status": "deleted"}
 
+
+# -------------------------------------------------
+# CCD compatibility fallback
+# -------------------------------------------------
 def list_immunizations(patient_id: int):
     conn = get_connection()
     cur = conn.cursor()
     cur.execute("SELECT * FROM immunizations WHERE patient_id = ?", (patient_id,))
     rows = cur.fetchall()
     conn.close()
+
+    log_event("list", "immunization", meta={"patient_id": patient_id, "count": len(rows)})
+
     return [dict_from_row(r) for r in rows]

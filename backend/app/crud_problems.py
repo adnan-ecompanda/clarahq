@@ -1,6 +1,7 @@
+from typing import Optional
 from .database import get_connection, dict_from_row
 from .schemas_problems import ProblemCreate, ProblemUpdate, ProblemOut
-from typing import Optional
+from .audit import log_event
 
 
 def init_problem_table():
@@ -54,6 +55,8 @@ def create_problem(data: ProblemCreate) -> ProblemOut:
     new_id = cur.lastrowid
     conn.close()
 
+    log_event("create", "problem", new_id, payload)
+
     return get_problem(new_id)
 
 
@@ -63,6 +66,10 @@ def get_problem(problem_id: int) -> Optional[ProblemOut]:
     cur.execute("SELECT * FROM problems WHERE id = ?", (problem_id,))
     row = cur.fetchone()
     conn.close()
+
+    if row:
+        log_event("read", "problem", problem_id)
+
     return ProblemOut(**dict_from_row(row)) if row else None
 
 
@@ -70,9 +77,14 @@ def list_patient_problems(patient_id: int):
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM problems WHERE patient_id = ? AND active = 1", (patient_id,))
+    cur.execute(
+        "SELECT * FROM problems WHERE patient_id = ? AND active = 1",
+        (patient_id,)
+    )
     rows = cur.fetchall()
     conn.close()
+
+    log_event("list", "problem", meta={"patient_id": patient_id, "count": len(rows)})
 
     return [ProblemOut(**dict_from_row(r)) for r in rows]
 
@@ -98,16 +110,23 @@ def update_problem(problem_id: int, data: ProblemUpdate):
     conn.commit()
     conn.close()
 
+    log_event("update", "problem", problem_id, payload)
+
     return get_problem(problem_id)
 
 
 def delete_problem(problem_id: int):
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("UPDATE problems SET active = 0 WHERE id = ?", (problem_id,))
     conn.commit()
     conn.close()
+
+    log_event("delete", "problem", problem_id)
+
     return {"status": "deleted"}
+
 
 def list_problems(patient_id: int):
     conn = get_connection()
@@ -115,4 +134,7 @@ def list_problems(patient_id: int):
     cur.execute("SELECT * FROM problems WHERE patient_id = ?", (patient_id,))
     rows = cur.fetchall()
     conn.close()
+
+    log_event("list", "problem", meta={"patient_id": patient_id, "count": len(rows)})
+
     return [dict_from_row(r) for r in rows]

@@ -1,6 +1,7 @@
 import sqlite3
 from datetime import datetime
 from .database import get_connection, dict_from_row
+from .audit import log_event       # <-- ADDED
 
 
 def init_appointment_tables():
@@ -24,7 +25,7 @@ def init_appointment_tables():
             notes TEXT,
 
             status TEXT DEFAULT 'scheduled',
-            -- allowed values: scheduled, confirmed, checked_in, completed, cancelled, no_show
+            -- allowed: scheduled, confirmed, checked_in, completed, cancelled, no_show
 
             telehealth_url TEXT,
             active INTEGER DEFAULT 1,
@@ -34,7 +35,7 @@ def init_appointment_tables():
         )
     """)
 
-    # Log table
+    # Optional appointment log table (kept)
     cur.execute("""
         CREATE TABLE IF NOT EXISTS appointment_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,6 +50,10 @@ def init_appointment_tables():
     conn.commit()
     conn.close()
 
+
+# ============================================================
+#                      CREATE
+# ============================================================
 
 def create_appointment(payload):
     conn = get_connection()
@@ -73,15 +78,28 @@ def create_appointment(payload):
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
+
+    # AUDIT
+    log_event("create", "appointment", new_id, meta=payload)
+
     return get_appointment(new_id)
 
+
+# ============================================================
+#                      READ
+# ============================================================
 
 def get_appointment(appt_id: int):
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("SELECT * FROM appointments WHERE id = ?", (appt_id,))
     row = cur.fetchone()
     conn.close()
+
+    if row:
+        log_event("read", "appointment", appt_id)
+
     return dict_from_row(row) if row else None
 
 
@@ -98,8 +116,15 @@ def list_appointments(provider_id: int = None, patient_id: int = None):
 
     rows = cur.fetchall()
     conn.close()
+
+    log_event("list", "appointment")
+
     return [dict_from_row(r) for r in rows]
 
+
+# ============================================================
+#                      UPDATE
+# ============================================================
 
 def update_appointment(appt_id: int, payload: dict):
     if not payload:
@@ -110,6 +135,7 @@ def update_appointment(appt_id: int, payload: dict):
 
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute(f"""
         UPDATE appointments
         SET {set_clause}, updated_at = datetime('now')
@@ -119,23 +145,45 @@ def update_appointment(appt_id: int, payload: dict):
     conn.commit()
     conn.close()
 
+    # AUDIT
+    log_event("update", "appointment", appt_id, meta=payload)
+
     return get_appointment(appt_id)
 
+
+# ============================================================
+#                      INTERNAL LOGGING TABLE
+# ============================================================
 
 def log_appointment_action(appt_id: int, action: str, by: int, note: str = None):
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("""
         INSERT INTO appointment_logs (appointment_id, action, action_by, note)
         VALUES (?, ?, ?, ?)
     """, (appt_id, action, by, note))
+
     conn.commit()
     conn.close()
 
+    # AUDIT MIRROR
+    log_event(action, "appointment_action", appt_id, meta={"by": by, "note": note})
+
+
+# ============================================================
+#                      DELETE
+# ============================================================
 
 def delete_appointment(appt_id: int):
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("UPDATE appointments SET active = 0 WHERE id = ?", (appt_id,))
     conn.commit()
     conn.close()
+
+    # AUDIT
+    log_event("delete", "appointment", appt_id)
+
+    return {"status": "deleted"}

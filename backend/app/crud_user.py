@@ -3,6 +3,7 @@ from typing import Optional
 from .database import get_connection, dict_from_row
 from .schemas_user import UserCreate, UserOut
 from .security import hash_password
+from .audit import log_event     # <-- ADDED
 
 
 def init_user_table():
@@ -43,6 +44,8 @@ def init_user_table():
     conn.close()
 
 
+# ------------------- CREATE -------------------
+
 def create_user(data: UserCreate) -> UserOut:
     conn = get_connection()
     cur = conn.cursor()
@@ -71,8 +74,13 @@ def create_user(data: UserCreate) -> UserOut:
     new_id = cur.lastrowid
     conn.close()
 
+    # AUDIT
+    log_event("create", "user", new_id, {"email": payload["email"]})
+
     return get_user(new_id)
 
+
+# ------------------- READ -------------------
 
 def get_user(user_id: int) -> Optional[UserOut]:
     conn = get_connection()
@@ -80,10 +88,14 @@ def get_user(user_id: int) -> Optional[UserOut]:
     cur.execute("SELECT * FROM users WHERE id = ?", (user_id,))
     row = cur.fetchone()
     conn.close()
-    if not row:
-        return None
-    return UserOut(**dict_from_row(row))
 
+    if row:
+        log_event("read", "user", user_id)
+
+    return UserOut(**dict_from_row(row)) if row else None
+
+
+# ------------------- LOOKUP BY EMAIL (login) -------------------
 
 def get_user_by_email(email: str):
     conn = get_connection()
@@ -91,12 +103,13 @@ def get_user_by_email(email: str):
 
     cur.execute("SELECT * FROM users WHERE email = ?", (email,))
     row = cur.fetchone()
-
     conn.close()
 
     if not row:
         return None
 
-    # Return raw database row (dictionary), not UserOut,
-    # because login needs access to password_hash
+    # AUDIT
+    log_event("lookup", "user", meta={"email": email})
+
+    # Login requires password_hash, so return raw dict
     return dict(row)

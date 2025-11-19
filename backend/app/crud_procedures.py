@@ -1,6 +1,7 @@
 from typing import Optional
 from .database import get_connection, dict_from_row
 from .schemas_procedures import ProcedureCreate, ProcedureUpdate, ProcedureOut
+from .audit import log_event
 
 
 def init_procedure_table():
@@ -56,6 +57,9 @@ def create_procedure(data: ProcedureCreate) -> ProcedureOut:
     new_id = cur.lastrowid
     conn.close()
 
+    # AUDIT
+    log_event("create", "procedure", new_id, payload)
+
     return get_procedure(new_id)
 
 
@@ -65,8 +69,11 @@ def get_procedure(proc_id: int) -> Optional[ProcedureOut]:
 
     cur.execute("SELECT * FROM procedures WHERE id = ?", (proc_id,))
     row = cur.fetchone()
-
     conn.close()
+
+    if row:
+        log_event("read", "procedure", proc_id)
+
     return ProcedureOut(**dict_from_row(row)) if row else None
 
 
@@ -74,9 +81,14 @@ def list_patient_procedures(patient_id: int):
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT * FROM procedures WHERE patient_id = ? AND active = 1", (patient_id,))
+    cur.execute(
+        "SELECT * FROM procedures WHERE patient_id = ? AND active = 1",
+        (patient_id,)
+    )
     rows = cur.fetchall()
     conn.close()
+
+    log_event("list", "procedure", meta={"patient_id": patient_id, "count": len(rows)})
 
     return [ProcedureOut(**dict_from_row(r)) for r in rows]
 
@@ -102,6 +114,8 @@ def update_procedure(proc_id: int, data: ProcedureUpdate):
     conn.commit()
     conn.close()
 
+    log_event("update", "procedure", proc_id, payload)
+
     return get_procedure(proc_id)
 
 
@@ -114,7 +128,10 @@ def delete_procedure(proc_id: int):
     conn.commit()
     conn.close()
 
+    log_event("delete", "procedure", proc_id)
+
     return {"status": "deleted"}
+
 
 def list_procedures(patient_id: int):
     conn = get_connection()
@@ -122,4 +139,7 @@ def list_procedures(patient_id: int):
     cur.execute("SELECT * FROM procedures WHERE patient_id = ?", (patient_id,))
     rows = cur.fetchall()
     conn.close()
+
+    log_event("list", "procedure", meta={"patient_id": patient_id, "count": len(rows)})
+
     return [dict_from_row(r) for r in rows]

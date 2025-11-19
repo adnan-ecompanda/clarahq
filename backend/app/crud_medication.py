@@ -1,10 +1,11 @@
-import sqlite3
 from typing import Optional
 from datetime import datetime
 from .database import get_connection, dict_from_row
 from .schemas_medication import (
     MedicationCreate, MedicationUpdate, MedicationOut
 )
+from .audit import log_event
+
 
 def init_medication_table():
     conn = get_connection()
@@ -70,6 +71,8 @@ def create_medication_order(data: MedicationCreate) -> MedicationOut:
     new_id = cur.lastrowid
     conn.close()
 
+    log_event("create", "medication", new_id, payload)
+
     return get_medication_order(new_id)
 
 
@@ -79,11 +82,16 @@ def get_medication_order(order_id: int) -> Optional[MedicationOut]:
     cur.execute("SELECT * FROM medications WHERE id = ?", (order_id,))
     row = cur.fetchone()
     conn.close()
+
+    if row:
+        log_event("read", "medication", order_id)
+
     return MedicationOut(**dict_from_row(row)) if row else None
 
 
 def update_medication_order(order_id: int, data: MedicationUpdate) -> MedicationOut:
     payload = {k: v for k, v in data.model_dump().items() if v is not None}
+
     if not payload:
         return get_medication_order(order_id)
 
@@ -92,14 +100,19 @@ def update_medication_order(order_id: int, data: MedicationUpdate) -> Medication
 
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute(
         f"UPDATE medications SET {set_clause}, updated_at = datetime('now') WHERE id = :id",
         payload
     )
+
     conn.commit()
     conn.close()
 
+    log_event("update", "medication", order_id, payload)
+
     return get_medication_order(order_id)
+
 
 def list_medications(patient_id: int):
     conn = get_connection()
@@ -107,4 +120,7 @@ def list_medications(patient_id: int):
     cur.execute("SELECT * FROM medications WHERE patient_id = ?", (patient_id,))
     rows = cur.fetchall()
     conn.close()
+
+    log_event("list", "medication", meta={"patient_id": patient_id, "count": len(rows)})
+
     return [dict_from_row(r) for r in rows]

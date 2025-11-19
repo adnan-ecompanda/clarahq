@@ -5,7 +5,12 @@ from .schemas_billing import (
     SuperbillCreate, SuperbillUpdate, SuperbillOut
 )
 
-# ------------------ CREATE TABLES ------------------
+from .audit import log_event   # <-- AUDIT LOGGER IMPORT
+
+
+# =====================================================
+#                INIT TABLES
+# =====================================================
 
 def init_billing_tables():
     conn = get_connection()
@@ -50,7 +55,9 @@ def init_billing_tables():
     conn.close()
 
 
-# ------------------ BILLING CODES CRUD ------------------
+# =====================================================
+#               BILLING CODES CRUD
+# =====================================================
 
 def create_billing_code(data: BillingCodeCreate) -> BillingCodeOut:
     conn = get_connection()
@@ -65,6 +72,9 @@ def create_billing_code(data: BillingCodeCreate) -> BillingCodeOut:
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
+
+    log_event("create", "billing_code", new_id, meta=payload)
+
     return get_billing_code(new_id)
 
 
@@ -74,6 +84,10 @@ def get_billing_code(code_id: int) -> Optional[BillingCodeOut]:
     cur.execute("SELECT * FROM billing_codes WHERE id = ?", (code_id,))
     row = cur.fetchone()
     conn.close()
+
+    if row:
+        log_event("read", "billing_code", code_id)
+
     return BillingCodeOut(**dict_from_row(row)) if row else None
 
 
@@ -83,6 +97,9 @@ def list_billing_codes():
     cur.execute("SELECT * FROM billing_codes WHERE active = 1")
     rows = cur.fetchall()
     conn.close()
+
+    log_event("list", "billing_code")
+
     return [BillingCodeOut(**dict_from_row(r)) for r in rows]
 
 
@@ -101,6 +118,8 @@ def update_billing_code(code_id: int, data: BillingCodeUpdate):
     conn.commit()
     conn.close()
 
+    log_event("update", "billing_code", code_id, payload)
+
     return get_billing_code(code_id)
 
 
@@ -110,10 +129,15 @@ def delete_billing_code(code_id: int):
     cur.execute("UPDATE billing_codes SET active = 0 WHERE id = ?", (code_id,))
     conn.commit()
     conn.close()
+
+    log_event("delete", "billing_code", code_id)
+
     return {"status": "deleted"}
 
 
-# ------------------ SUPERBILL CRUD ------------------
+# =====================================================
+#                 SUPERBILL CRUD
+# =====================================================
 
 def create_superbill(data: SuperbillCreate) -> SuperbillOut:
     conn = get_connection()
@@ -136,6 +160,9 @@ def create_superbill(data: SuperbillCreate) -> SuperbillOut:
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
+
+    log_event("create", "superbill", new_id, meta=payload)
+
     return get_superbill(new_id)
 
 
@@ -145,6 +172,10 @@ def get_superbill(sb_id: int) -> Optional[SuperbillOut]:
     cur.execute("SELECT * FROM superbills WHERE id = ?", (sb_id,))
     row = cur.fetchone()
     conn.close()
+
+    if row:
+        log_event("read", "superbill", sb_id)
+
     return SuperbillOut(**dict_from_row(row)) if row else None
 
 
@@ -169,6 +200,8 @@ def update_superbill(sb_id: int, data: SuperbillUpdate):
     conn.commit()
     conn.close()
 
+    log_event("update", "superbill", sb_id, payload)
+
     return get_superbill(sb_id)
 
 
@@ -179,13 +212,19 @@ def delete_superbill(sb_id: int):
     conn.commit()
     conn.close()
 
+    log_event("delete", "superbill", sb_id)
+
     return {"status": "deleted"}
+
+
+# =====================================================
+#          AUTO GENERATE SUPERBILL
+# =====================================================
 
 def auto_generate_superbill(encounter_id: int):
     conn = get_connection()
     cur = conn.cursor()
 
-    # 1. Get encounter
     cur.execute("SELECT * FROM encounters WHERE id = ?", (encounter_id,))
     enc = cur.fetchone()
     if not enc:
@@ -195,29 +234,24 @@ def auto_generate_superbill(encounter_id: int):
     patient_id = enc["patient_id"]
     provider_id = enc["provider_id"]
 
-    # 2. Get ICD-10 from problems
+    # Problems → ICD10
     cur.execute("""
-        SELECT icd10_code
-        FROM problems
+        SELECT icd10_code FROM problems
         WHERE patient_id = ? AND active = 1
     """, (patient_id,))
-    icd_codes = [r["icd10_code"] for r in cur.fetchall()]
+    rows = cur.fetchall()
+    icd10 = rows[0]["icd10_code"] if rows else None
 
-    icd10_code = icd_codes[0] if icd_codes else None
-
-    # 3. Get CPT from procedures
+    # Procedures → CPT
     cur.execute("""
-        SELECT cpt_code
-        FROM procedures
+        SELECT cpt_code FROM procedures
         WHERE encounter_id = ?
     """, (encounter_id,))
     proc = cur.fetchone()
-    cpt_code = proc["cpt_code"] if proc else None
+    cpt = proc["cpt_code"] if proc else None
 
-    # 4. If CPT missing → infer from visit_type
-    if not cpt_code:
-        visit_type = enc.get("visit_type", "")
-
+    # Default CPT from visit type
+    if not cpt:
         visit_map = {
             "office_new": "99203",
             "office_established": "99213",
@@ -226,25 +260,27 @@ def auto_generate_superbill(encounter_id: int):
             "urgent_care": "99204"
         }
 
+        visit_type = (enc.get("visit_type") or "").lower()
         for k, v in visit_map.items():
-            if k in visit_type.lower():
-                cpt_code = v
+            if k in visit_type:
+                cpt = v
                 break
 
-        if not cpt_code:
-            cpt_code = "99213"  # DEFAULT CPT
+        if not cpt:
+            cpt = "99213"
 
-    # 5. Insert superbill
     cur.execute("""
         INSERT INTO superbills (
             encounter_id, patient_id, provider_id,
             cpt_code, icd10_code, units, modifier, status
         )
         VALUES (?, ?, ?, ?, ?, 1, NULL, 'draft')
-    """, (encounter_id, patient_id, provider_id, cpt_code, icd10_code))
+    """, (encounter_id, patient_id, provider_id, cpt, icd10))
 
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
+
+    log_event("create", "superbill", new_id, meta={"auto_generated": True})
 
     return get_superbill(new_id)

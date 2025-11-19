@@ -1,9 +1,12 @@
-import sqlite3
 from typing import Optional, List
 from .database import get_connection, dict_from_row
 from .schemas_encounter import EncounterCreate, EncounterUpdate, EncounterOut
+from .audit import log_event    # <-- AUDIT LOGGER
 
 
+# -------------------------------------------------
+# Initialize Table
+# -------------------------------------------------
 def init_encounter_table():
     conn = get_connection()
     cur = conn.cursor()
@@ -46,10 +49,12 @@ def init_encounter_table():
     conn.close()
 
 
+# -------------------------------------------------
+# Create
+# -------------------------------------------------
 def create_encounter(data: EncounterCreate) -> EncounterOut:
     conn = get_connection()
     cur = conn.cursor()
-
     payload = data.model_dump()
 
     cur.execute("""
@@ -70,37 +75,54 @@ def create_encounter(data: EncounterCreate) -> EncounterOut:
     """, payload)
 
     conn.commit()
-    new_id = cur.lastrowid
+    encounter_id = cur.lastrowid
     conn.close()
 
-    return get_encounter(new_id)
+    log_event("create", "encounter", encounter_id, payload)
+
+    return get_encounter(encounter_id)
 
 
+# -------------------------------------------------
+# Read (single)
+# -------------------------------------------------
 def get_encounter(encounter_id: int) -> Optional[EncounterOut]:
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("SELECT * FROM encounters WHERE id = ? AND active = 1", (encounter_id,))
     row = cur.fetchone()
     conn.close()
 
-    if not row:
-        return None
-    return EncounterOut(**dict_from_row(row))
+    if row:
+        log_event("read", "encounter", encounter_id)
+
+    return EncounterOut(**dict_from_row(row)) if row else None
 
 
+# -------------------------------------------------
+# List all encounters
+# -------------------------------------------------
 def list_encounters() -> List[EncounterOut]:
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("SELECT * FROM encounters WHERE active = 1 ORDER BY id DESC")
     rows = cur.fetchall()
     conn.close()
 
+    log_event("list", "encounter", meta={"count": len(rows)})
+
     return [EncounterOut(**dict_from_row(r)) for r in rows]
 
 
+# -------------------------------------------------
+# List for patient
+# -------------------------------------------------
 def list_patient_encounters(patient_id: int) -> List[EncounterOut]:
     conn = get_connection()
     cur = conn.cursor()
+
     cur.execute("""
         SELECT * FROM encounters
         WHERE patient_id = ? AND active = 1
@@ -109,9 +131,14 @@ def list_patient_encounters(patient_id: int) -> List[EncounterOut]:
     rows = cur.fetchall()
     conn.close()
 
+    log_event("list", "encounter", meta={"patient_id": patient_id, "count": len(rows)})
+
     return [EncounterOut(**dict_from_row(r)) for r in rows]
 
 
+# -------------------------------------------------
+# Update
+# -------------------------------------------------
 def update_encounter(encounter_id: int, data: EncounterUpdate) -> Optional[EncounterOut]:
     conn = get_connection()
     cur = conn.cursor()
@@ -132,9 +159,14 @@ def update_encounter(encounter_id: int, data: EncounterUpdate) -> Optional[Encou
     conn.commit()
     conn.close()
 
+    log_event("update", "encounter", encounter_id, updates)
+
     return get_encounter(encounter_id)
 
 
+# -------------------------------------------------
+# Delete (soft delete)
+# -------------------------------------------------
 def delete_encounter(encounter_id: int) -> bool:
     conn = get_connection()
     cur = conn.cursor()
@@ -147,8 +179,15 @@ def delete_encounter(encounter_id: int) -> bool:
 
     conn.commit()
     conn.close()
+
+    log_event("delete", "encounter", encounter_id)
+
     return True
 
+
+# -------------------------------------------------
+# CCD compatibility function
+# -------------------------------------------------
 def list_encounters_for_patient(patient_id: int):
     conn = get_connection()
     cur = conn.cursor()
@@ -163,4 +202,6 @@ def list_encounters_for_patient(patient_id: int):
     rows = cur.fetchall()
     conn.close()
     
+    log_event("list", "encounter", meta={"patient_id": patient_id, "count": len(rows)})
+
     return [dict_from_row(r) for r in rows]

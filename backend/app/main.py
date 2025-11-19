@@ -7,7 +7,7 @@ from .crud_encounter import init_encounter_table
 from .crud_note import init_note_table
 from .crud_order import init_order_table
 from .crud_results import init_results_tables
-from .crud_results import init_imaging_attachments_table
+# from .crud_results import init_imaging_attachments_table
 from .crud_medication import init_medication_table
 from .crud_allergies import init_allergy_table
 from .crud_mar import init_mar_tables
@@ -25,6 +25,7 @@ from .crud_appointments import init_appointment_tables
 from .crud_portal_messages import init_portal_message_tables
 from .crud_notifications import init_notification_tables
 from .crud_insurance import init_insurance_tables
+from .audit import init_audit_table
 
 from .routers import patients as patients_router
 from .routers import users as users_router
@@ -60,7 +61,7 @@ init_encounter_table()
 init_note_table()
 init_order_table()
 init_results_tables()
-init_imaging_attachments_table()
+# init_imaging_attachments_table()
 init_medication_table()
 init_allergy_table()
 init_mar_tables()
@@ -78,6 +79,7 @@ init_appointment_tables()
 init_portal_message_tables()
 init_notification_tables()
 init_insurance_tables()
+init_audit_table()
 
 app = FastAPI(
     title="ClaraHQ Backend (Python 3.13 + SQLite)",

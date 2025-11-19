@@ -1,7 +1,7 @@
-import sqlite3
 from typing import Optional, List
 from .database import get_connection, dict_from_row
 from .schemas_patient import PatientCreate, PatientUpdate, PatientOut
+from .audit import log_event
 
 
 def init_patient_table():
@@ -39,8 +39,6 @@ def init_patient_table():
 
     conn.commit()
     conn.close()
-
-    # Ensure new column exists even in older DB
     ensure_active_column()
 
 
@@ -53,27 +51,27 @@ def create_patient(data: PatientCreate) -> PatientOut:
     cur.execute("""
         INSERT INTO patients (
             first_name, last_name, date_of_birth, gender,
-            phone, email,
-            address_line1, address_line2, city, state, postal_code,
+            phone, email, address_line1, address_line2,
+            city, state, postal_code,
             emergency_contact_name, emergency_contact_phone, emergency_contact_relationship,
             insurance_provider, insurance_member_id, insurance_group_number,
-            allergies, medications, chronic_conditions,
-            active
+            allergies, medications, chronic_conditions, active
         )
         VALUES (
             :first_name, :last_name, :date_of_birth, :gender,
-            :phone, :email,
-            :address_line1, :address_line2, :city, :state, :postal_code,
+            :phone, :email, :address_line1, :address_line2,
+            :city, :state, :postal_code,
             :emergency_contact_name, :emergency_contact_phone, :emergency_contact_relationship,
             :insurance_provider, :insurance_member_id, :insurance_group_number,
-            :allergies, :medications, :chronic_conditions,
-            :active
+            :allergies, :medications, :chronic_conditions, :active
         )
     """, payload)
 
     conn.commit()
     new_id = cur.lastrowid
     conn.close()
+
+    log_event("create", "patient", new_id, payload)
 
     return get_patient(new_id)
 
@@ -85,9 +83,10 @@ def get_patient(patient_id: int) -> Optional[PatientOut]:
     row = cur.fetchone()
     conn.close()
 
-    if not row:
-        return None
-    return PatientOut(**dict_from_row(row))
+    if row:
+        log_event("read", "patient", patient_id)
+
+    return PatientOut(**dict_from_row(row)) if row else None
 
 
 def list_patients() -> List[PatientOut]:
@@ -97,6 +96,8 @@ def list_patients() -> List[PatientOut]:
     rows = cur.fetchall()
     conn.close()
 
+    log_event("list", "patient", meta={"count": len(rows)})
+
     return [PatientOut(**dict_from_row(r)) for r in rows]
 
 
@@ -105,10 +106,11 @@ def update_patient(patient_id: int, data: PatientUpdate) -> Optional[PatientOut]
     cur = conn.cursor()
 
     updates = data.model_dump(exclude_unset=True)
+
     if not updates:
         return get_patient(patient_id)
 
-    set_clause = ", ".join([f"{field} = :{field}" for field in updates])
+    set_clause = ", ".join([f"{f} = :{f}" for f in updates])
     updates["id"] = patient_id
 
     cur.execute(f"""
@@ -119,6 +121,8 @@ def update_patient(patient_id: int, data: PatientUpdate) -> Optional[PatientOut]
 
     conn.commit()
     conn.close()
+
+    log_event("update", "patient", patient_id, updates)
 
     return get_patient(patient_id)
 
@@ -135,7 +139,11 @@ def delete_patient(patient_id: int) -> bool:
 
     conn.commit()
     conn.close()
+
+    log_event("delete", "patient", patient_id)
+
     return True
+
 
 def ensure_active_column():
     conn = get_connection()
