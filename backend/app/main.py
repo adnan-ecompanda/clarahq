@@ -26,6 +26,7 @@ from .crud_portal_messages import init_portal_message_tables
 from .crud_notifications import init_notification_tables
 from .crud_insurance import init_insurance_tables
 from .audit import init_audit_table
+from .crud_prescriptions import init_prescription_table
 
 from .routers import patients as patients_router
 from .routers import users as users_router
@@ -54,6 +55,7 @@ from .routers import ccd as ccd_router
 from .routers import avs as avs_router
 from .routers import portal_auth as portal_auth_router
 from .routers import telehealth as telehealth_router
+from .routers import prescriptions as prescriptions_router
 
 # Create tables on startup
 init_db()
@@ -82,6 +84,7 @@ init_portal_message_tables()
 init_notification_tables()
 init_insurance_tables()
 init_audit_table()
+init_prescription_table()
 
 app = FastAPI(
     title="ClaraHQ Backend (Python 3.13 + SQLite)",
@@ -120,3 +123,4 @@ app.include_router(ccd_router.router)
 app.include_router(avs_router.router)
 app.include_router(portal_auth_router.router)
 app.include_router(telehealth_router.router)
+app.include_router(prescriptions_router.router)
