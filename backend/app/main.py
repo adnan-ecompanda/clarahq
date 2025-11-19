@@ -56,6 +56,7 @@ from .routers import avs as avs_router
 from .routers import portal_auth as portal_auth_router
 from .routers import telehealth as telehealth_router
 from .routers import prescriptions as prescriptions_router
+from .routers import insurance_eligibility as insurance_eligibility_router
 
 # Create tables on startup
 init_db()
@@ -124,3 +125,4 @@ app.include_router(avs_router.router)
 app.include_router(portal_auth_router.router)
 app.include_router(telehealth_router.router)
 app.include_router(prescriptions_router.router)
+app.include_router(insurance_eligibility_router.router)
