@@ -47,7 +47,7 @@ def generate_ccd(patient_id: int):
 
     patient_data = patient.model_dump()
     patient_data["name"] = f"{patient.first_name} {patient.last_name}"
-    patient_data["dob"] = patient.date_of_birth or ""
+    patient_data["dob"] = patient.dob or ""
 
     allergies, meds, problems, immunizations, procedures, vitals, encounters, labs, imaging, careplans = \
         get_all_sections(patient_id)
@@ -72,7 +72,7 @@ def generate_pretty_ccd(patient_id: int):
 
     patient_data = patient.model_dump()
     patient_data["name"] = f"{patient.first_name} {patient.last_name}"
-    patient_data["dob"] = patient.date_of_birth or ""
+    patient_data["dob"] = patient.dob or ""
 
     allergies, meds, problems, immunizations, procedures, vitals, encounters, labs, imaging, careplans = \
         get_all_sections(patient_id)
@@ -98,7 +98,7 @@ def download_ccd(patient_id: int):
 
     patient_data = patient.model_dump()
     patient_data["name"] = f"{patient.first_name} {patient.last_name}"
-    patient_data["dob"] = patient.date_of_birth or ""
+    patient_data["dob"] = patient.dob or ""
 
     allergies, meds, problems, immunizations, procedures, vitals, encounters, labs, imaging, careplans = \
         get_all_sections(patient_id)
@@ -130,7 +130,7 @@ def generate_fhir_ccd(patient_id: int):
 
     patient_data = patient.model_dump()
     patient_data["name"] = f"{patient.first_name} {patient.last_name}"
-    patient_data["dob"] = patient.date_of_birth or ""
+    patient_data["dob"] = patient.dob or ""
 
     allergies, meds, problems, immunizations, procedures, vitals, encounters, labs, imaging, careplans = \
         get_all_sections(patient_id)

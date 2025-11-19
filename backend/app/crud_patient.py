@@ -2,7 +2,7 @@ from typing import Optional, List
 from .database import get_connection, dict_from_row
 from .schemas_patient import PatientCreate, PatientUpdate, PatientOut
 from .audit import log_event
-
+from .security import hash_password
 
 def init_patient_table():
     conn = get_connection()
@@ -13,24 +13,29 @@ def init_patient_table():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             first_name TEXT NOT NULL,
             last_name TEXT NOT NULL,
-            date_of_birth TEXT,
+            dob TEXT,
             gender TEXT,
-            phone TEXT,
+            phone_primary TEXT,
             email TEXT,
+
             address_line1 TEXT,
             address_line2 TEXT,
             city TEXT,
             state TEXT,
-            postal_code TEXT,
+            zip_code TEXT,
+
             emergency_contact_name TEXT,
             emergency_contact_phone TEXT,
             emergency_contact_relationship TEXT,
+
             insurance_provider TEXT,
             insurance_member_id TEXT,
             insurance_group_number TEXT,
+
             allergies TEXT,
             medications TEXT,
             chronic_conditions TEXT,
+
             active INTEGER DEFAULT 1,
             created_at TEXT DEFAULT (datetime('now')),
             updated_at TEXT DEFAULT (datetime('now'))
@@ -39,7 +44,6 @@ def init_patient_table():
 
     conn.commit()
     conn.close()
-    ensure_active_column()
 
 
 def create_patient(data: PatientCreate) -> PatientOut:
@@ -50,17 +54,17 @@ def create_patient(data: PatientCreate) -> PatientOut:
 
     cur.execute("""
         INSERT INTO patients (
-            first_name, last_name, date_of_birth, gender,
-            phone, email, address_line1, address_line2,
-            city, state, postal_code,
+            first_name, last_name, dob, gender,
+            phone_primary, email,
+            address_line1, address_line2, city, state, zip_code,
             emergency_contact_name, emergency_contact_phone, emergency_contact_relationship,
             insurance_provider, insurance_member_id, insurance_group_number,
             allergies, medications, chronic_conditions, active
         )
         VALUES (
-            :first_name, :last_name, :date_of_birth, :gender,
-            :phone, :email, :address_line1, :address_line2,
-            :city, :state, :postal_code,
+            :first_name, :last_name, :dob, :gender,
+            :phone_primary, :email,
+            :address_line1, :address_line2, :city, :state, :zip_code,
             :emergency_contact_name, :emergency_contact_phone, :emergency_contact_relationship,
             :insurance_provider, :insurance_member_id, :insurance_group_number,
             :allergies, :medications, :chronic_conditions, :active
@@ -112,6 +116,8 @@ def update_patient(patient_id: int, data: PatientUpdate) -> Optional[PatientOut]
 
     set_clause = ", ".join([f"{f} = :{f}" for f in updates])
     updates["id"] = patient_id
+    if "password" in updates:
+        updates["password_hash"] = hash_password(updates.pop("password"))
 
     cur.execute(f"""
         UPDATE patients

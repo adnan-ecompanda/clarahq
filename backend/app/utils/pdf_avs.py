@@ -98,7 +98,7 @@ def generate_avs_pdf(output_path, patient, encounter, vitals, meds, allergies, p
     story.append(Paragraph("Patient Information", styles["SectionTitle"]))
     patient_info = [
         ["Full Name", f"{patient.first_name} {patient.last_name}"],
-        ["DOB", patient.date_of_birth or "N/A"],
+        ["DOB", patient.dob or "N/A"],
         ["Gender", patient.gender or "N/A"],
         ["Phone", patient.phone or "N/A"],
         ["Email", patient.email or "N/A"],
