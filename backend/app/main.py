@@ -15,7 +15,6 @@ from .crud_immunization import init_immunization_table
 from .crud_problems import init_problem_table
 from .crud_procedures import init_procedure_table
 from .crud_careplans import init_careplan_table
-from .crud_billing import init_billing_tables
 from .crud_tasks import init_task_table
 from .crud_documents import init_document_tables
 from .crud_messages import init_message_tables
@@ -28,6 +27,10 @@ from .crud_insurance import init_insurance_tables
 from .audit import init_audit_table
 from .crud_prescriptions import init_prescription_table
 
+# NEW BILLING MODULE (ONLY THESE 2 INITIALIZERS)
+from .crud_billing import init_superbill_table, init_superbill_cpt_table, init_superbill_icd_table
+
+# Routers
 from .routers import patients as patients_router
 from .routers import users as users_router
 from .routers import encounters as encounters_router
@@ -58,7 +61,10 @@ from .routers import telehealth as telehealth_router
 from .routers import prescriptions as prescriptions_router
 from .routers import insurance_eligibility as insurance_eligibility_router
 
-# Create tables on startup
+# -----------------------------------------------------
+# INIT DB TABLES
+# -----------------------------------------------------
+
 init_db()
 init_user_table()
 init_patient_table()
@@ -66,7 +72,6 @@ init_encounter_table()
 init_note_table()
 init_order_table()
 init_results_tables()
-# init_imaging_attachments_table()
 init_medication_table()
 init_allergy_table()
 init_mar_tables()
@@ -74,7 +79,6 @@ init_immunization_table()
 init_problem_table()
 init_procedure_table()
 init_careplan_table()
-init_billing_tables()
 init_task_table()
 init_document_tables()
 init_message_tables()
@@ -86,6 +90,15 @@ init_notification_tables()
 init_insurance_tables()
 init_audit_table()
 init_prescription_table()
+init_superbill_table()
+
+# NEW BILLING TABLES (ONLY THESE)
+init_superbill_cpt_table()
+init_superbill_icd_table()
+
+# -----------------------------------------------------
+# FASTAPI INSTANCE
+# -----------------------------------------------------
 
 app = FastAPI(
     title="ClaraHQ Backend (Python 3.13 + SQLite)",
@@ -96,7 +109,10 @@ app = FastAPI(
 def root():
     return {"message": "ClaraHQ backend running", "docs": "/docs"}
 
-# Routers
+# -----------------------------------------------------
+# ROUTERS
+# -----------------------------------------------------
+
 app.include_router(users_router.router)
 app.include_router(patients_router.router)
 app.include_router(encounters_router.router)
@@ -110,7 +126,10 @@ app.include_router(immunization_router.router)
 app.include_router(problems_router.router)
 app.include_router(procedures_router.router)
 app.include_router(careplans_router.router)
+
+# NEW NESTED SUPERBILL ROUTER
 app.include_router(billing_router.router)
+
 app.include_router(tasks_router.router)
 app.include_router(documents_router.router)
 app.include_router(messages_router.router)
@@ -126,3 +145,7 @@ app.include_router(portal_auth_router.router)
 app.include_router(telehealth_router.router)
 app.include_router(prescriptions_router.router)
 app.include_router(insurance_eligibility_router.router)
+
+# 🚫 DO NOT USE OLD BILLING MODULES
+# app.include_router(billing_lines_router.router)
+# app.include_router(billing_claim_router.router)

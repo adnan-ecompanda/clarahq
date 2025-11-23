@@ -1,64 +1,46 @@
+# schemas_billing.py
 from pydantic import BaseModel
-from typing import Optional
-
-# ------------------ BILLING CODES ------------------
-
-class BillingCodeBase(BaseModel):
-    code: str
-    code_type: str  # "CPT", "HCPCS", "ICD10"
-    description: Optional[str] = None
-    amount: Optional[float] = 0.0
-    active: Optional[int] = 1
+from typing import List, Optional
 
 
-class BillingCodeCreate(BillingCodeBase):
-    pass
+class CPTItem(BaseModel):
+    cpt_code: str
+    units: int
+    amount: float
+    modifier: Optional[str] = None
+    icd_pointer: Optional[str] = None
+
+    class Config:
+        from_attributes = True
 
 
-class BillingCodeUpdate(BaseModel):
-    code: Optional[str] = None
-    code_type: Optional[str] = None
-    description: Optional[str] = None
-    amount: Optional[float] = None
-    active: Optional[int] = None
+class ICDItem(BaseModel):
+    icd_code: str
+    description: Optional[str] = ""
+
+    class Config:
+        from_attributes = True
 
 
-class BillingCodeOut(BillingCodeBase):
-    id: int
-
-
-# ------------------ SUPERBILLS ------------------
-
-class SuperbillBase(BaseModel):
+class SuperbillCreate(BaseModel):
     encounter_id: int
     patient_id: int
     provider_id: int
-
-    cpt_code: Optional[str] = None
-    icd10_code: Optional[str] = None
-
-    units: Optional[int] = 1
-    modifier: Optional[str] = None
-    notes: Optional[str] = None
-
-    status: Optional[str] = "draft"  # draft, submitted, billed, denied, paid
-
-    active: Optional[int] = 1
+    notes: Optional[str] = ""
+    status: Optional[str] = "draft"
+    cpt_items: List[CPTItem]
+    icd_items: List[ICDItem]
 
 
-class SuperbillCreate(SuperbillBase):
-    pass
-
-
-class SuperbillUpdate(BaseModel):
-    cpt_code: Optional[str] = None
-    icd10_code: Optional[str] = None
-    units: Optional[int] = None
-    modifier: Optional[str] = None
-    notes: Optional[str] = None
-    status: Optional[str] = None
-    active: Optional[int] = None
-
-
-class SuperbillOut(SuperbillBase):
+class SuperbillResponse(BaseModel):
     id: int
+    encounter_id: int
+    patient_id: int
+    provider_id: int
+    notes: str
+    status: str
+    cpt_items: List[CPTItem]
+    icd_items: List[ICDItem]
+
+    class Config:
+        from_attributes = True

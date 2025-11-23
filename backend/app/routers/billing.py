@@ -1,79 +1,51 @@
-from fastapi import APIRouter, HTTPException, Depends
-from ..auth import require_roles
-from ..schemas_billing import (
-    BillingCodeCreate, BillingCodeUpdate,
-    SuperbillCreate, SuperbillUpdate
-)
-from ..crud_billing import (
-    create_billing_code, list_billing_codes, get_billing_code,
-    update_billing_code, delete_billing_code,
-    create_superbill, get_superbill, update_superbill,
-    delete_superbill, auto_generate_superbill
+# routers/billing.py
+from fastapi import APIRouter, HTTPException
+from app.schemas_billing import SuperbillCreate, SuperbillResponse
+from app.crud_billing import (
+    create_superbill, list_superbills, get_superbill_by_id,
+    update_superbill_status, generate_superbill_pdf,
+    cms1500_json, generate_x12
 )
 
 router = APIRouter(prefix="/billing", tags=["Billing"])
 
 
-# ---------------- BILLING CODES ----------------
-
-@router.post("/codes", dependencies=[Depends(require_roles("admin"))])
-def add_code(data: BillingCodeCreate):
-    return create_billing_code(data)
-
-
-@router.get("/codes")
-def list_codes():
-    return list_billing_codes()
-
-
-@router.get("/codes/{code_id}")
-def get_code(code_id: int):
-    rec = get_billing_code(code_id)
-    if not rec:
-        raise HTTPException(404, "Billing code not found")
-    return rec
-
-
-@router.put("/codes/{code_id}", dependencies=[Depends(require_roles("admin"))])
-def update_code(code_id: int, data: BillingCodeUpdate):
-    return update_billing_code(code_id, data)
-
-
-@router.delete("/codes/{code_id}", dependencies=[Depends(require_roles("admin"))])
-def delete_code(code_id: int):
-    return delete_billing_code(code_id)
-
-
-# ---------------- SUPERBILLS ----------------
-
-@router.post("/superbill", dependencies=[Depends(require_roles("admin", "provider"))])
-def create_sb(data: SuperbillCreate):
-    return create_superbill(data)
-
-
-@router.get("/superbill/{sb_id}")
-def get_sb(sb_id: int):
-    rec = get_superbill(sb_id)
-    if not rec:
-        raise HTTPException(404, "Superbill not found")
-    return rec
-
-
-@router.put("/superbill/{sb_id}", dependencies=[Depends(require_roles("admin", "provider"))])
-def update_sb(sb_id: int, data: SuperbillUpdate):
-    return update_superbill(sb_id, data)
-
-
-@router.delete("/superbill/{sb_id}", dependencies=[Depends(require_roles("admin"))])
-def delete_sb(sb_id: int):
-    return delete_superbill(sb_id)
-
-@router.post("/billing/superbill/auto/{encounter_id}")
-def generate_auto_superbill(
-    encounter_id: int,
-    current_user=Depends(require_roles("admin", "provider"))
-):
-    sb = auto_generate_superbill(encounter_id)
-    if not sb:
-        raise HTTPException(404, "Encounter not found")
+@router.post("/superbills", response_model=SuperbillResponse)
+def create_sb(payload: SuperbillCreate):
+    sb = create_superbill(payload)
     return sb
+
+
+@router.get("/superbills", response_model=list[SuperbillResponse])
+def list_sb():
+    return list_superbills()
+
+
+@router.get("/superbills/{sb_id}", response_model=SuperbillResponse)
+def get_sb(sb_id: int):
+    sb = get_superbill_by_id(sb_id)
+    if not sb:
+        raise HTTPException(404, "Superbill not found")
+    return sb
+
+
+@router.put("/superbills/{sb_id}/status")
+def update_status(sb_id: int, status: str):
+    sb = update_superbill_status(sb_id, status)
+    return {"message": "updated", "superbill": sb}
+
+
+@router.get("/superbills/{sb_id}/pdf")
+def pdf(sb_id: int):
+    encoded = generate_superbill_pdf(sb_id)
+    return {"superbill_id": sb_id, "pdf_base64": encoded}
+
+
+@router.get("/superbills/{sb_id}/cms1500")
+def cms1500(sb_id: int):
+    return cms1500_json(sb_id)
+
+
+@router.get("/superbills/{sb_id}/x12")
+def x12(sb_id: int):
+    return {"x12": generate_x12(sb_id)}
