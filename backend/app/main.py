@@ -7,7 +7,6 @@ from .crud_encounter import init_encounter_table
 from .crud_note import init_note_table
 from .crud_order import init_order_table
 from .crud_results import init_results_tables
-# from .crud_results import init_imaging_attachments_table
 from .crud_medication import init_medication_table
 from .crud_allergies import init_allergy_table
 from .crud_mar import init_mar_tables
@@ -27,10 +26,13 @@ from .crud_insurance import init_insurance_tables
 from .audit import init_audit_table
 from .crud_prescriptions import init_prescription_table
 
-# NEW BILLING MODULE (ONLY THESE 2 INITIALIZERS)
-from .crud_billing import init_superbill_table, init_superbill_cpt_table, init_superbill_icd_table
+# ✔ ONLY THESE TWO EXIST NOW
+from .crud_billing import (
+    init_superbill_table,
+    init_superbill_cpt_table,
+    init_superbill_icd_table
+)
 
-# Routers
 from .routers import patients as patients_router
 from .routers import users as users_router
 from .routers import encounters as encounters_router
@@ -60,6 +62,7 @@ from .routers import portal_auth as portal_auth_router
 from .routers import telehealth as telehealth_router
 from .routers import prescriptions as prescriptions_router
 from .routers import insurance_eligibility as insurance_eligibility_router
+from .routers import claims as claims_router
 
 # -----------------------------------------------------
 # INIT DB TABLES
@@ -90,9 +93,8 @@ init_notification_tables()
 init_insurance_tables()
 init_audit_table()
 init_prescription_table()
-init_superbill_table()
 
-# NEW BILLING TABLES (ONLY THESE)
+# ❗ DO NOT CALL init_superbill_table() — IT NO LONGER EXISTS
 init_superbill_cpt_table()
 init_superbill_icd_table()
 
@@ -129,6 +131,7 @@ app.include_router(careplans_router.router)
 
 # NEW NESTED SUPERBILL ROUTER
 app.include_router(billing_router.router)
+app.include_router(claims_router.router)
 
 app.include_router(tasks_router.router)
 app.include_router(documents_router.router)
@@ -145,7 +148,3 @@ app.include_router(portal_auth_router.router)
 app.include_router(telehealth_router.router)
 app.include_router(prescriptions_router.router)
 app.include_router(insurance_eligibility_router.router)
-
-# 🚫 DO NOT USE OLD BILLING MODULES
-# app.include_router(billing_lines_router.router)
-# app.include_router(billing_claim_router.router)

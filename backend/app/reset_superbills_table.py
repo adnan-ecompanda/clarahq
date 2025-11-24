@@ -9,6 +9,8 @@ print("Dropping superbill tables...")
 cur.execute("DROP TABLE IF EXISTS superbill_cpt_items")
 cur.execute("DROP TABLE IF EXISTS superbill_icd_items")
 cur.execute("DROP TABLE IF EXISTS superbills")
+cur.execute("DROP TABLE IF EXISTS claims")
+cur.execute("DROP TABLE IF EXISTS claim_lines")
 
 conn.commit()
 conn.close()

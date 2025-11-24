@@ -1,4 +1,3 @@
-# schemas_billing.py
 from pydantic import BaseModel
 from typing import List, Optional
 
@@ -10,16 +9,10 @@ class CPTItem(BaseModel):
     modifier: Optional[str] = None
     icd_pointer: Optional[str] = None
 
-    class Config:
-        from_attributes = True
-
 
 class ICDItem(BaseModel):
     icd_code: str
-    description: Optional[str] = ""
-
-    class Config:
-        from_attributes = True
+    description: Optional[str] = None
 
 
 class SuperbillCreate(BaseModel):
@@ -41,6 +34,3 @@ class SuperbillResponse(BaseModel):
     status: str
     cpt_items: List[CPTItem]
     icd_items: List[ICDItem]
-
-    class Config:
-        from_attributes = True
