@@ -33,6 +33,7 @@ from .crud_billing import (
     init_superbill_cpt_table,
     init_superbill_icd_table
 )
+from .crud_eligibility import init_eligibility_tables
 
 from .routers import patients as patients_router
 from .routers import users as users_router
@@ -64,7 +65,7 @@ from .routers import telehealth as telehealth_router
 from .routers import prescriptions as prescriptions_router
 from .routers import insurance_eligibility as insurance_eligibility_router
 from .routers import claims as claims_router
-
+from .routers import eligibility as eligibility_router
 # -----------------------------------------------------
 # INIT DB TABLES
 # -----------------------------------------------------
@@ -100,6 +101,7 @@ init_superbill_cpt_table()
 init_superbill_icd_table()
 init_superbill_table()
 init_claim_tables()
+init_eligibility_tables()
 
 # -----------------------------------------------------
 # FASTAPI INSTANCE
@@ -151,3 +153,4 @@ app.include_router(portal_auth_router.router)
 app.include_router(telehealth_router.router)
 app.include_router(prescriptions_router.router)
 app.include_router(insurance_eligibility_router.router)
+app.include_router(eligibility_router.router)

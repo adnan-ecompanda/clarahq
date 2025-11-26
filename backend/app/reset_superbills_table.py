@@ -6,11 +6,11 @@ cur = conn.cursor()
 
 print("Dropping superbill tables...")
 
-cur.execute("DROP TABLE IF EXISTS superbill_cpt_items")
-cur.execute("DROP TABLE IF EXISTS superbill_icd_items")
-cur.execute("DROP TABLE IF EXISTS superbills")
-cur.execute("DROP TABLE IF EXISTS claims")
-cur.execute("DROP TABLE IF EXISTS claim_lines")
+# cur.execute("DROP TABLE IF EXISTS superbill_cpt_items")
+# cur.execute("DROP TABLE IF EXISTS superbill_icd_items")
+# cur.execute("DROP TABLE IF EXISTS superbills")
+# cur.execute("DROP TABLE IF EXISTS claims")
+cur.execute("DROP TABLE IF EXISTS eligibility_requests")
 
 conn.commit()
 conn.close()
