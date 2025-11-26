@@ -25,6 +25,7 @@ from .crud_notifications import init_notification_tables
 from .crud_insurance import init_insurance_tables
 from .audit import init_audit_table
 from .crud_prescriptions import init_prescription_table
+from .crud_claims import init_claim_tables
 
 # ✔ ONLY THESE TWO EXIST NOW
 from .crud_billing import (
@@ -97,6 +98,8 @@ init_prescription_table()
 # ❗ DO NOT CALL init_superbill_table() — IT NO LONGER EXISTS
 init_superbill_cpt_table()
 init_superbill_icd_table()
+init_superbill_table()
+init_claim_tables()
 
 # -----------------------------------------------------
 # FASTAPI INSTANCE

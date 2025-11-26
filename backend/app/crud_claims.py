@@ -1,16 +1,57 @@
+# app/crud_claims.py
+
 from typing import Dict, Any
 from .database import get_connection, dict_from_row
-from .crud_billing import get_superbill, superbill_exists
+from .crud_billing import get_superbill_by_id, superbill_exists
+
+
+# --------------------------------------------------
+# INIT CLAIM TABLES (REQUIRED)
+# --------------------------------------------------
+def init_claim_tables():
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # claims table
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS claims (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            superbill_id INTEGER,
+            patient_id INTEGER,
+            provider_id INTEGER,
+            status TEXT,
+            created_at TEXT,
+            updated_at TEXT
+        )
+    """)
+
+    # claim lines
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS claim_lines (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            claim_id INTEGER,
+            cpt_code TEXT,
+            units INTEGER,
+            amount REAL,
+            modifier TEXT,
+            icd_pointer TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    conn.commit()
+    conn.close()
 
 
 # --------------------------------------------------
 # CREATE CLAIM FROM SUPERBILL
 # --------------------------------------------------
 def create_claim_from_superbill(sb_id: int) -> Dict[str, Any]:
+
     if not superbill_exists(sb_id):
         raise ValueError("Superbill does not exist")
 
-    sb = get_superbill(sb_id)
+    sb = get_superbill_by_id(sb_id)
 
     conn = get_connection()
     cur = conn.cursor()
