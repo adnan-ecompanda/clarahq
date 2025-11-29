@@ -154,7 +154,9 @@ app.include_router(billing_router.router)
 app.include_router(claims_router.router)
 
 app.include_router(tasks_router.router)
-app.include_router(documents_router.router)
+# app.include_router(documents_router.router)
+app.include_router(documents_router.router, prefix="/documents", tags=["Documents"])
+
 app.include_router(messages_router.router)
 app.include_router(referrals_router.router)
 app.include_router(vitals_router.router)

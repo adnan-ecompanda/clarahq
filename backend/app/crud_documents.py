@@ -4,6 +4,9 @@ from datetime import datetime
 from fastapi import UploadFile
 from .database import get_connection, dict_from_row
 from .schemas_documents import DocumentOut
+import base64
+import re
+import sqlite3
 
 UPLOAD_ROOT = "uploads/patient_docs"
 
@@ -103,3 +106,87 @@ def get_documents_for_patient(patient_id: int):
     conn.close()
 
     return [DocumentOut(**dict_from_row(r)) for r in rows]
+
+UPLOAD_ROOT = os.path.abspath("uploads")
+DOC_DIR = os.path.join(UPLOAD_ROOT, "documents")
+os.makedirs(DOC_DIR, exist_ok=True)
+
+
+# Clean base64 before decoding
+def clean_b64(data: str) -> str:
+    data = re.sub(r"^data:[a-zA-Z0-9\/\-\+\.]+;base64,", "", data)
+    data = re.sub(r"\s+", "", data)
+    pad = len(data) % 4
+    if pad:
+        data += "=" * (4 - pad)
+    return data
+
+
+def upload_document_base64(data):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    # Decode file
+    cleaned = clean_b64(data.base64_data)
+    file_bytes = base64.b64decode(cleaned)
+
+    ext = data.file_type.lower().replace(".", "")
+    safe_name = f"{datetime.now().timestamp()}_{data.file_name}"
+
+    file_path = os.path.join(DOC_DIR, safe_name)
+
+    with open(file_path, "wb") as f:
+        f.write(file_bytes)
+
+    # Insert DB record
+    cur.execute("""
+        INSERT INTO patient_documents (patient_id, file_name, file_type, file_size, file_path)
+        VALUES (?, ?, ?, ?, ?)
+    """, (
+        data.patient_id,
+        data.file_name,
+        ext,
+        len(file_bytes),
+        safe_name
+    ))
+
+    conn.commit()
+
+    return {"status": "uploaded", "document_id": cur.lastrowid}
+
+
+def list_documents_for_patient(patient_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT id, patient_id, file_name, file_type, file_size, file_path, uploaded_at
+        FROM patient_documents
+        WHERE patient_id = ?
+        ORDER BY uploaded_at DESC
+    """, (patient_id,))
+
+    rows = cur.fetchall()
+    keys = ["id", "patient_id", "file_name", "file_type", "file_size",
+            "file_path", "uploaded_at"]
+
+    return [dict(zip(keys, r)) for r in rows]
+
+
+def get_document_file(doc_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT file_path FROM patient_documents WHERE id = ?
+    """, (doc_id,))
+
+    row = cur.fetchone()
+    if not row:
+        return None
+
+    file_path = os.path.join(DOC_DIR, row[0])
+    if not os.path.exists(file_path):
+        return None
+
+    return file_path

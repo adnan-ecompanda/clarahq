@@ -1,10 +1,16 @@
 import os
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from fastapi.responses import FileResponse
 
 from ..crud_documents import get_document, create_document, get_documents_for_patient
 from ..auth import get_current_user, require_roles
-from fastapi import UploadFile, File, Form, Depends
+
+from ..schemas_documents import DocumentUploadBase64
+from ..crud_documents import (
+    upload_document_base64,
+    list_documents_for_patient,
+    get_document_file
+)
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -50,3 +56,21 @@ def download_document(doc_id: int):
         filename=doc.file_name,
         media_type=doc.file_type or "application/octet-stream"
     )
+
+@router.post("/upload_doc")
+def upload_doc(payload: DocumentUploadBase64):
+    return upload_document_base64(payload)
+
+
+@router.get("/patient_docs/{patient_id}")
+def get_docs(patient_id: int):
+    return list_documents_for_patient(patient_id)
+
+
+@router.get("/download_doc/{doc_id}")
+def download_doc(doc_id: int):
+    path = get_document_file(doc_id)
+    if not path:
+        raise HTTPException(404, "Document not found")
+
+    return FileResponse(path)
