@@ -36,6 +36,7 @@ from .crud_eligibility import init_eligibility_tables
 from .crud_pa import init_pa_tables
 from .crud_templates import init_template_tables
 from .crud_patient_portal import init_patient_portal_tables
+from .crud_consent import init_consent_tables
 
 from .routers import patients as patients_router
 from .routers import users as users_router
@@ -72,6 +73,8 @@ from .routers import pa as pa_router
 from .routers import scraper as scraper_router
 from .routers import templates as templates_router
 from .routers import patient_portal as patient_portal_router
+from .routers import consent as consent_router
+
 
 # -----------------------------------------------------
 # INIT DB TABLES
@@ -114,6 +117,7 @@ init_scraper_tables()
 init_template_tables()
 
 init_patient_portal_tables()
+init_consent_tables()
 # -----------------------------------------------------
 # FASTAPI INSTANCE
 # -----------------------------------------------------
@@ -169,3 +173,4 @@ app.include_router(pa_router.router)
 app.include_router(scraper_router.router)
 app.include_router(templates_router.router)
 app.include_router(patient_portal_router.router)
+app.include_router(consent_router.router)
