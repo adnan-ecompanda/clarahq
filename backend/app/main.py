@@ -24,7 +24,7 @@ from .crud_portal_messages import init_portal_message_tables
 from .crud_notifications import init_notification_tables
 from .crud_insurance import init_insurance_tables
 from .audit import init_audit_table
-from .crud_prescriptions import init_prescription_table
+# from .crud_prescriptions import init_prescription_table
 from .crud_claims import init_claim_tables
 from .crud_scraper import init_scraper_tables
 from .crud_billing import (
@@ -40,6 +40,7 @@ from .crud_consent import init_consent_tables
 from .crud_questionnaires import init_questionnaire_tables
 from .crud_payments import init_payment_tables
 from .crud_insurance_cards import init_insurance_card_tables
+from .crud_prescriptions import init_prescription_tables
 
 from .routers import patients as patients_router
 from .routers import users as users_router
@@ -80,7 +81,7 @@ from .routers import consent as consent_router
 from .routers import questionnaires as questionnaires_router
 from .routers import payments as payments_router
 from .routers import insurance_cards as insurance_cards_router
-
+from .routers import prescriptions as prescriptions_router
 
 # -----------------------------------------------------
 # INIT DB TABLES
@@ -110,7 +111,7 @@ init_portal_message_tables()
 init_notification_tables()
 init_insurance_tables()
 init_audit_table()
-init_prescription_table()
+# init_prescription_table()
 
 # ❗ DO NOT CALL init_superbill_table() — IT NO LONGER EXISTS
 init_superbill_cpt_table()
@@ -127,6 +128,7 @@ init_consent_tables()
 init_questionnaire_tables()
 init_payment_tables()
 init_insurance_card_tables()
+init_prescription_tables()
 
 # -----------------------------------------------------
 # FASTAPI INSTANCE
