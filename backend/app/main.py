@@ -39,6 +39,7 @@ from .crud_patient_portal import init_patient_portal_tables
 from .crud_consent import init_consent_tables
 from .crud_questionnaires import init_questionnaire_tables
 from .crud_payments import init_payment_tables
+from .crud_insurance_cards import init_insurance_card_tables
 
 from .routers import patients as patients_router
 from .routers import users as users_router
@@ -78,6 +79,7 @@ from .routers import patient_portal as patient_portal_router
 from .routers import consent as consent_router
 from .routers import questionnaires as questionnaires_router
 from .routers import payments as payments_router
+from .routers import insurance_cards as insurance_cards_router
 
 
 # -----------------------------------------------------
@@ -124,6 +126,8 @@ init_patient_portal_tables()
 init_consent_tables()
 init_questionnaire_tables()
 init_payment_tables()
+init_insurance_card_tables()
+
 # -----------------------------------------------------
 # FASTAPI INSTANCE
 # -----------------------------------------------------
@@ -184,3 +188,4 @@ app.include_router(patient_portal_router.router)
 app.include_router(consent_router.router)
 app.include_router(questionnaires_router.router)
 app.include_router(payments_router.router)
+app.include_router(insurance_cards_router.router)
